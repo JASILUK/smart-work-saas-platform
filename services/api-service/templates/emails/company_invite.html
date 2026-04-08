@@ -1,0 +1,19 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h1>You are invited to join {{ company_name }}</h1>
+
+<p>
+  You have been invited to join <strong>{{ company_name }}</strong>.
+</p>
+
+<p>
+  <a href="{{ invite_link }}" class="button">
+    Accept Invitation
+  </a>
+</p>
+
+<p>
+  This link expires in {{ expiry_hours }} hours.
+</p>
+{% endblock %}

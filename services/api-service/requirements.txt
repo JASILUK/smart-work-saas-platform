@@ -1,0 +1,38 @@
+# Core Django & API
+Django>=4.2,<5.0
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.3.1
+whitenoise==6.7.0
+python-dotenv==1.0.0
+
+# Database
+psycopg2-binary==2.9.9
+Pillow==10.2.0
+
+# Async & WebSockets (Real-time)
+channels==4.0.0
+channels-redis==4.1.0
+daphne==4.0.0
+
+# Caching & Ticket System (THE FIX)
+redis==5.0.1
+django-redis==5.4.0
+
+# Task Queue (Celery)
+celery==5.3.6
+django-celery-beat==2.5.0
+flower==2.0.1
+
+# Communications & Security
+sendgrid==6.11.0
+twilio==8.2.2
+pyotp==2.9.0
+qrcode==7.4.2
+
+# Development & Linting
+black==24.2.0
+flake8==7.0.0
+isort==5.13.2
+django-debug-toolbar==4.3.0
+django-extensions==3.2.3

@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+
+  gateway:
+    build: ../gateway
+    ports:
+      - "8001:80"
+    depends_on:
+      - api
+      - ai
+
+  api:
+    build: ../services/api-service
+    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    volumes:
+      - ../services/api-service:/app
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres-api
+      - redis
+
+  api-worker:
+    build: ../services/api-service
+    command: celery -A config worker -l info
+    volumes:
+      - ../services/api-service:/app
+    env_file:
+      - .env
+    depends_on:
+      - postgres-api
+      - redis
+
+  api-beat:
+    build: ../services/api-service
+    command: celery -A config beat -l info
+    volumes:
+      - ../services/api-service:/app
+    env_file:
+      - .env
+    depends_on:
+      - postgres-api
+      - redis
+
+  ai:
+    build: ../services/ai-service
+    volumes:
+      - ../services/ai-service:/app
+    expose:
+      - "8000"
+
+  postgres-api:
+    image: postgres:15
+    env_file:
+      - .env
+    volumes:
+      - postgres_api_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+
+volumes:
+  postgres_api_data:

@@ -1,0 +1,25 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h1>Verify Your Email Address</h1>
+
+<p>Hello,</p>
+
+<p>To complete your registration, please verify your email address.</p>
+
+{% if code %}
+<p>Your verification code is:</p>
+<div class="code-box">{{ code }}</div>
+{% endif %}
+
+{% if link %}
+<p>
+  <a href="{{ link }}" class="button">
+    Verify Email
+  </a>
+</p>
+{% endif %}
+
+<p>This verification expires in <strong>{{ expiry_minutes }} minutes</strong>.</p>
+
+{% endblock %}

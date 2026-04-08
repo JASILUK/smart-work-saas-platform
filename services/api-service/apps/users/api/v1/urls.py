@@ -1,0 +1,55 @@
+from django.urls import path
+
+from apps.users.api.v1.views import (
+    ChangePasswordAPI,
+    ForgotPasswordAPI,
+    GoogleLoginAPIView,
+    LogoutAPI,
+    MeAPI,
+    MFABackupRegenerateAPI,
+    MFADeviceDeleteAPI,
+    MFADeviceListAPI,
+    MFALoginVerifyAPI,
+    MFASetupAPI,
+    MFAVerifyAPI,
+    RefreshTokenAPI,
+    RegisterUserAPI,
+    RegisterWithCompanyAPI,
+    ResendVerificationAPI,
+    ResetPasswordAPI,
+    StandardLoginAPI,
+    VerifyEmailAPI,
+)
+
+urlpatterns = [
+    path("auth/register/", RegisterUserAPI.as_view(), name="user-registration"),
+    path(
+        "auth/register_with_company/",
+        RegisterWithCompanyAPI.as_view(),
+        name="register-with-company",
+    ),
+    path("auth/verify-email/", VerifyEmailAPI.as_view(), name="verify-email"),
+    path(
+        "auth/resend-verification/",
+        ResendVerificationAPI.as_view(),
+        name="resend-verification",
+    ),
+    path("auth/email/login/", StandardLoginAPI.as_view(), name="standard-login"),
+    path("auth/logout/", LogoutAPI.as_view(), name="logout"),
+    path("auth/refresh/token/", RefreshTokenAPI.as_view(), name="refresh-tokeny"),
+    path(
+        "auth/password/forget/",
+        ForgotPasswordAPI.as_view(),
+        name="request-forget-password",
+    ),
+    path("auth/password/reset/", ResetPasswordAPI.as_view(), name="password-reset"),
+    path("auth/password/change/", ChangePasswordAPI.as_view(), name="change-password"),
+    path("auth/me/", MeAPI.as_view(), name="me-api"),
+    path("auth/mfa/setup/", MFASetupAPI.as_view()),
+    path("auth/mfa/verify/", MFAVerifyAPI.as_view()),
+    path("auth/mfa/devices/", MFADeviceListAPI.as_view()),
+    path("auth/mfa/device/<int:device_id>/", MFADeviceDeleteAPI.as_view()),
+    path("auth/mfa/backup/regenerate/", MFABackupRegenerateAPI.as_view()),
+    path("auth/mfa/login-verify/", MFALoginVerifyAPI.as_view()),
+    path("auth/google/", GoogleLoginAPIView.as_view(), name="google-login"),
+]

@@ -1,0 +1,17 @@
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  migrations
+  | venv
+  | __pycache__
+  | .git
+)/
+'''
+
+[tool.isort]
+profile = "black"
+skip = ["migrations", "venv", "__pycache__"]
+line_length = 88
