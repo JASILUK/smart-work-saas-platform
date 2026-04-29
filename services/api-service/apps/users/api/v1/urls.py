@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.users.api.v1.views import (
+    CSRFTokenView,
     ChangePasswordAPI,
     ForgotPasswordAPI,
     GoogleLoginAPIView,
@@ -52,4 +53,8 @@ urlpatterns = [
     path("auth/mfa/backup/regenerate/", MFABackupRegenerateAPI.as_view()),
     path("auth/mfa/login-verify/", MFALoginVerifyAPI.as_view()),
     path("auth/google/", GoogleLoginAPIView.as_view(), name="google-login"),
+
+    # urls.py
+
+    path("auth/csrf/", CSRFTokenView.as_view()),
 ]

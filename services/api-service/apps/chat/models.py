@@ -78,6 +78,8 @@ class ConversationParticipant(TimeStampedModel):
         default=Role.MEMBER
     )
 
+    unread_count = models.IntegerField(default=0)
+
     class Meta:
         unique_together = ("conversation", "membership")
         indexes = [

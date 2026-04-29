@@ -34,6 +34,6 @@ def get_conversation_messages(conversation_id):
         Message.objects
         .filter(conversation_id=conversation_id, deleted=False)
         .select_related("sender", "sender__user")
-        .prefetch_related("statuses")  # 🔥 CRITICAL
-        .order_by("created_at")
+        .prefetch_related("statuses")
+        .order_by("created_at")   # 🔥 FIXED
     )
