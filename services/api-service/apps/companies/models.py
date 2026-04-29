@@ -80,6 +80,9 @@ class Membership(TimeStampedModel):
 
     joined_at = models.DateTimeField(auto_now_add=True)
 
+    # 🔥 ADD THIS
+    last_seen = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         unique_together = ("user", "company")
 

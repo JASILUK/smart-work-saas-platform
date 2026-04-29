@@ -15,6 +15,11 @@ from apps.core.api_response import ApiResponse
 import uuid
 from django.core.cache import cache
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+
+class ChatPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
 
 
 class ConversationListView(BaseCompanyAPIView):
@@ -52,9 +57,14 @@ class DirectChatView(BaseCompanyAPIView):
 class ConversationMessagesView(BaseCompanyAPIView):
 
     def get(self, request, conversation_id):
-        messages = MessageService.get_messages(
+        cursor = request.query_params.get("cursor")
+        limit = int(request.query_params.get("limit", 20))
+
+        messages, next_cursor, has_more = MessageService.get_paginated_messages(
             conversation_id=conversation_id,
             membership=request.membership,
+            cursor=cursor,
+            limit=limit,
         )
 
         serializer = MessageSerializer(
@@ -63,7 +73,11 @@ class ConversationMessagesView(BaseCompanyAPIView):
             context={"request": request},
         )
 
-        return ApiResponse.success(data=serializer.data)
+        return ApiResponse.success(data={
+            "results": serializer.data,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        })
 
 
 class SendMessageView(BaseCompanyAPIView):
@@ -90,8 +104,19 @@ class WebSocketTicketView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        tenant_id = request.headers.get("X-Company-ID")
+
         ticket = str(uuid.uuid4())
-        cache.set(f"ws_ticket_{ticket}", request.user.id, timeout=30)
+
+        cache.set(
+            f"ws_ticket_{ticket}",
+            {
+                "user_id": request.user.id,
+                "tenant_id": tenant_id, 
+            },
+            timeout=30,
+        )
+
         return ApiResponse.success(data={"ticket": ticket})
 
 

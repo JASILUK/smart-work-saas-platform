@@ -2,6 +2,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.middleware.csrf import get_token
+
 
 from apps.core.api_response import ApiResponse
 from apps.core.exceptions import ApplicationError
@@ -396,6 +398,17 @@ class GoogleLoginAPIView(APIView):
         strategy = WebStrategy() if client_type == "web" else MobileStrategy()
         return strategy.build_response(payload=payload)
 
+
+
+
+
+class CSRFTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            "csrfToken": get_token(request)
+        })
 
 # class PhoneLoginAPI(APIView):
 #     permission_classes = []

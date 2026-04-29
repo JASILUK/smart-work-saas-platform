@@ -43,12 +43,16 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:5174",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8001",
     "http://127.0.0.1:8001",
 ]
+
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
 
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
