@@ -371,3 +371,9 @@ class TenantConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event))
     async def last_seen_update(self, event):
         await self.send(text_data=json.dumps(event))
+    
+    async def message_deleted(self, event):
+        await self.send(text_data=json.dumps(event))
+    
+    async def message_edited(self, event):
+        await self.send(text_data=json.dumps(event))

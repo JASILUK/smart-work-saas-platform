@@ -90,6 +90,8 @@ class SendMessageView(BaseCompanyAPIView):
             conversation_id=serializer.validated_data["conversation_id"],
             sender_membership=request.membership,
             content=serializer.validated_data["content"],
+            reply_to_id=serializer.validated_data.get("reply_to"),  # 🔥 FIX
+
         )
 
         return ApiResponse.success(
@@ -99,6 +101,41 @@ class SendMessageView(BaseCompanyAPIView):
             ).data
         )
 
+class MessageDetailView(BaseCompanyAPIView):
+
+    def delete(self, request, message_id):
+        try:
+            message = MessageService.delete_message(
+                message_id=message_id,
+                membership=request.membership,
+            )
+
+            return ApiResponse.success(data={
+                "message_id": str(message.id),
+                "deleted": True
+            })
+
+        except Exception as e:
+            return ApiResponse.error(message=str(e))
+    
+    def patch(self, request, message_id):
+        content = request.data.get("content")
+
+        if not content:
+            return ApiResponse.error(message="Content required")
+
+        message = MessageService.edit_message(
+            message_id=message_id,
+            membership=request.membership,
+            new_content=content,
+        )
+
+        return ApiResponse.success(data={
+            "message_id": str(message.id),
+            "content": message.content,
+            "edited": True
+        })
+    
 
 class WebSocketTicketView(APIView):
     permission_classes = [IsAuthenticated]

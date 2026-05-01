@@ -4,6 +4,7 @@ from .views import (
     ConversationMessagesView,
     DirectChatView,
     MarkAsReadView,
+    MessageDetailView,
     SendMessageView,
     WebSocketTicketView,
 )
@@ -18,5 +19,6 @@ urlpatterns = [
         name="conversation-messages",
     ),
     path("send-message/", SendMessageView.as_view()),
+    path("messages/edit/<uuid:message_id>/",MessageDetailView.as_view()),
     path("ws-ticket/", WebSocketTicketView.as_view(), name="ws-ticket"),
 ]

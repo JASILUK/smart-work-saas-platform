@@ -32,7 +32,7 @@ def get_user_conversations(membership):
 def get_conversation_messages(conversation_id):
     return (
         Message.objects
-        .filter(conversation_id=conversation_id, deleted=False)
+        .filter(conversation_id=conversation_id)
         .select_related("sender", "sender__user")
         .prefetch_related("statuses")
         .order_by("created_at")   # 🔥 FIXED

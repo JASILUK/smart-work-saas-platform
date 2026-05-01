@@ -108,14 +108,39 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    message = serializers.CharField(source="content")
+    message = serializers.SerializerMethodField()
     sender = serializers.IntegerField(source="sender.id")
     status = serializers.SerializerMethodField()
+    deleted = serializers.BooleanField()
+    edited = serializers.SerializerMethodField()
+    reply = serializers.SerializerMethodField()  # 🔥 NEW
+
+
 
     class Meta:
         model = Message
-        fields = ["id", "message", "sender", "created_at", "status"]
+        fields = ["id", "message", "sender", "created_at", "status","deleted","edited","reply"]
 
+    def get_message(self, obj):
+        if obj.deleted:
+            return "This message was deleted"
+        return obj.content
+    
+
+    def get_reply(self, obj):
+        if not obj.reply_to:
+            return None
+
+        return {
+            "id": str(obj.reply_to.id),
+             "message": "This message was deleted" if obj.reply_to.deleted else obj.reply_to.content,
+            "sender": obj.reply_to.sender_id,
+            "deleted": obj.reply_to.deleted,
+        }
+    
+    def get_edited(self, obj):
+        return obj.edited_at is not None
+    
     def get_status(self, obj):
         request = self.context.get("request")
 
@@ -157,3 +182,4 @@ class DirectChatSerializer(serializers.Serializer):
 class SendMessageSerializer(serializers.Serializer):
     conversation_id = serializers.UUIDField()
     content = serializers.CharField()
+    reply_to = serializers.UUIDField(required=False, allow_null=True)

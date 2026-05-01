@@ -118,6 +118,13 @@ class Message(TimeStampedModel):
     content = models.TextField(blank=True)
 
     file = models.FileField(upload_to="chat_files/", null=True, blank=True)
+    reply_to = models.ForeignKey(
+                "self",
+                null=True,
+                blank=True,
+                on_delete=models.SET_NULL,
+                related_name="replies"
+            )
 
     edited_at = models.DateTimeField(null=True, blank=True)
 
