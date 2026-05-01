@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
@@ -29,14 +31,33 @@ class MessageService:
 
     @staticmethod
     @transaction.atomic
-    def send_message(conversation_id, sender_membership, content):
+    def send_message(conversation_id, sender_membership, content,reply_to_id=None):
         conversation = get_object_or_404(Conversation, id=conversation_id)
+
+        reply_to = None
+    
+        if reply_to_id:
+            reply_to = Message.objects.filter(id=reply_to_id).first()
+
+            if reply_to and reply_to.conversation_id != conversation.id:
+                raise ApplicationError("Invalid reply target")
 
         message = Message.objects.create(
             conversation=conversation,
             sender=sender_membership,
-            content=content
+            content=content,
+            reply_to=reply_to,  
         )
+
+        reply_payload = None
+
+        if reply_to:
+            reply_payload = {
+                "id": str(reply_to.id),
+                "message": "This message was deleted" if reply_to.deleted else reply_to.content,
+                "sender": reply_to.sender_id,
+                "deleted": reply_to.deleted,
+            }
 
         participants = list(
             ConversationParticipant.objects.filter(
@@ -104,6 +125,8 @@ class MessageService:
                 "sender": sender_membership.id,
                 "created_at": message.created_at.isoformat(),
                 "status": "sent",
+                "deleted": False,  
+                "reply": reply_payload, 
             }
         )
   
@@ -154,6 +177,82 @@ class MessageService:
                     "is_unread": p.membership_id != sender_membership.id
                 }
             )
+
+        return message
+    
+
+    @staticmethod
+    @transaction.atomic
+    def delete_message(message_id, membership):
+        message = get_object_or_404(Message, id=message_id)
+
+        # 🔥 SECURITY CHECK (CRITICAL)
+        if message.sender_id != membership.id:
+            raise ApplicationError("You can only delete your own message")
+        
+        if timezone.now() - message.created_at > timedelta(minutes=15):
+            raise ApplicationError("Delete time expired")
+
+
+        # 🔥 ALREADY DELETED
+        if message.deleted:
+            return message
+
+        now = timezone.now()
+
+        message.deleted = True
+        message.deleted_at = now
+        message.save(update_fields=["deleted", "deleted_at"])
+
+        channel_layer = get_channel_layer()
+
+        # 🔥 BROADCAST TO ROOM
+        async_to_sync(channel_layer.group_send)(
+            f"tenant_{message.conversation.company_id}_room_{message.conversation_id}",
+            {
+                "type": "message_deleted",
+                "message_id": str(message.id),
+                "room_id": str(message.conversation_id),
+                "deleted_at": now.isoformat(),
+            }
+        )
+
+        return message
+    
+    @staticmethod
+    @transaction.atomic
+    def edit_message(message_id, membership, new_content):
+        message = get_object_or_404(Message, id=message_id)
+
+        # 🔥 SECURITY
+        if message.sender_id != membership.id:
+            raise ApplicationError("You can only edit your own message")
+
+      
+        if timezone.now() - message.created_at > timedelta(minutes=15):
+            raise ApplicationError("Edit time expired")
+
+        # 🔥 NO CHANGE
+        if message.content == new_content:
+            return message
+
+        message.content = new_content
+        message.edited_at = timezone.now()
+        message.save(update_fields=["content", "edited_at"])
+
+        # 🔥 BROADCAST
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            f"tenant_{message.conversation.company_id}_room_{message.conversation_id}",
+            {
+                "type": "message_edited",
+                "message_id": str(message.id),
+                "room_id": str(message.conversation_id),
+                "content": message.content,
+                "edited_at": message.edited_at.isoformat(),
+            }
+        )
 
         return message
 
