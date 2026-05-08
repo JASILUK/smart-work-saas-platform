@@ -22,6 +22,9 @@ class Conversation(TimeStampedModel):
     type = models.CharField(max_length=20, choices=Type.choices)
 
     name = models.CharField(max_length=255, blank=True, null=True)
+    avatar = models.URLField(null=True, blank=True)
+
+    description = models.TextField(null=True, blank=True)
 
     department = models.ForeignKey(
         "companies.Department",
@@ -57,6 +60,7 @@ class Conversation(TimeStampedModel):
 class ConversationParticipant(TimeStampedModel):
 
     class Role(models.TextChoices):
+        OWNER = "owner", "Owner"
         ADMIN = "admin", "Admin"
         MEMBER = "member", "Member"
 
@@ -90,10 +94,20 @@ class ConversationParticipant(TimeStampedModel):
 class Message(TimeStampedModel):
 
     class MessageType(models.TextChoices):
-        TEXT = "text", "Text"
-        IMAGE = "image", "Image"
-        FILE = "file", "File"
-        SYSTEM = "system", "System"
+        TEXT = "text"
+        IMAGE = "image"
+        VIDEO = "video"
+        AUDIO = "audio"
+        FILE = "file"
+        SYSTEM = "system"
+
+    class SystemEventType(models.TextChoices):
+        GROUP_CREATED = "group_created"
+        MEMBER_ADDED = "member_added"
+        MEMBER_REMOVED = "member_removed"
+        MEMBER_LEFT = "member_left"
+        ROLE_UPDATED = "role_updated"
+        GROUP_UPDATED = "group_updated"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -106,7 +120,9 @@ class Message(TimeStampedModel):
     sender = models.ForeignKey(
         "companies.Membership",
         on_delete=models.CASCADE,
-        related_name="sent_messages"
+        related_name="sent_messages",
+        null=True,
+        blank=True, 
     )
 
     message_type = models.CharField(
@@ -115,9 +131,26 @@ class Message(TimeStampedModel):
         default=MessageType.TEXT
     )
 
-    content = models.TextField(blank=True)
+    system_event_type = models.CharField(
+        max_length=50,
+        choices=SystemEventType.choices,
+        null=True,
+        blank=True,
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
 
-    file = models.FileField(upload_to="chat_files/", null=True, blank=True)
+    mime_type = models.CharField(max_length=100, null=True, blank=True)
+
+    content = models.TextField(blank=True, null=True)
+
+    file_url = models.URLField(null=True, blank=True)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    file_size = models.IntegerField(null=True, blank=True)
+
+    duration = models.IntegerField(null=True, blank=True)  
     reply_to = models.ForeignKey(
                 "self",
                 null=True,
