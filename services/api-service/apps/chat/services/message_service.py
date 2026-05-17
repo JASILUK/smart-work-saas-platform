@@ -150,6 +150,14 @@ class MessageService:
         # =========================
         MessageService._broadcast_message(message, reply_payload)
 
+       
+        MessageService._send_notifications(
+            conversation=conversation,
+            sender_membership=sender_membership,
+            message=message,
+        )
+       
+
         return message
 
     # =========================
@@ -511,6 +519,61 @@ class MessageService:
                 }
             )
 
+    
+    @staticmethod
+    def _send_notifications(
+        conversation,
+        sender_membership,
+        message,
+    ):
+
+        from apps.notifications.services.notification_service import (
+            NotificationService,
+        )
+
+        participants = (
+            ConversationParticipant.objects
+            .filter(
+                conversation=conversation
+            )
+            .select_related("membership")
+        )
+
+        for participant in participants:
+
+            membership = participant.membership
+
+            # ============================================
+            # SKIP SENDER
+            # ============================================
+
+            if membership.id == sender_membership.id:
+                continue
+
+            # ============================================
+            # SKIP USERS ACTIVE INSIDE ROOM
+            # ============================================
+
+            in_room = redis_client.sismember(
+                f"room:{conversation.company_id}:{conversation.id}",
+                membership.id,
+            )
+
+            if in_room:
+                continue
+
+            # ============================================
+            # SEND PUSH NOTIFICATION
+            # ============================================
+
+            NotificationService.send_chat_notification(
+                membership=membership,
+                sender_membership=sender_membership,
+                conversation=conversation,
+                message=message,
+            )
+
+
             
     # =========================
     # DELETE MESSAGE
@@ -672,16 +735,26 @@ class MessageService:
         return paginator.paginate()
 
     @staticmethod
-    def get_messages(conversation_id, membership):
-        is_member = ConversationParticipant.objects.filter(
-            conversation_id=conversation_id,
-            membership=membership
-        ).exists()
+    def get_messages(
+        conversation_id,
+        membership,
+    ):
+
+        is_member = (
+            ConversationParticipant.objects.filter(
+                conversation_id=conversation_id,
+                membership=membership,
+            ).exists()
+        )
 
         if not is_member:
-            raise ApplicationError("Not allowed")
+            raise ApplicationError(
+                "Not allowed"
+            )
 
-        return get_conversation_messages(conversation_id).prefetch_related("statuses")
+        return get_conversation_messages(
+            conversation_id=conversation_id,
+        )
 
 
     @staticmethod

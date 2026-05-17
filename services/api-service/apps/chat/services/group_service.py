@@ -119,6 +119,10 @@ class GroupService:
             conversation_id
         )
 
+        GroupService._ensure_not_department_conversation(
+            conversation
+        )
+
         GroupService._ensure_admin_or_owner(
             conversation_id,
             actor_membership,
@@ -197,6 +201,10 @@ class GroupService:
             conversation_id
         )
 
+        GroupService._ensure_not_department_conversation(
+            conversation
+        )
+
         GroupService._ensure_admin_or_owner(
             conversation_id,
             actor_membership,
@@ -261,6 +269,10 @@ class GroupService:
 
         conversation = GroupService._get_group_conversation(
             conversation_id
+        )
+
+        GroupService._ensure_not_department_conversation(
+            conversation
         )
 
         participant = get_object_or_404(
@@ -328,6 +340,10 @@ class GroupService:
         conversation = GroupService._get_group_conversation(
             conversation_id
         )
+    
+        GroupService._ensure_not_department_conversation(
+            conversation
+        )
 
         actor = GroupService._get_participant(
             conversation_id,
@@ -390,7 +406,10 @@ class GroupService:
         conversation = GroupService._get_group_conversation(
             conversation_id
         )
-
+        
+        GroupService._ensure_not_department_conversation(
+            conversation
+        )
         GroupService._ensure_admin_or_owner(
             conversation_id,
             actor_membership,
@@ -530,4 +549,18 @@ class GroupService:
         if not exists:
             raise ApplicationError(
                 "Admin permission required"
+            )
+        
+    @staticmethod
+    def _ensure_not_department_conversation(
+        conversation,
+    ):
+
+        if (
+            conversation.type ==
+            Conversation.Type.DEPARTMENT
+        ):
+
+            raise ApplicationError(
+                "Department conversations are system managed"
             )

@@ -1,15 +1,22 @@
-from apps.chat.services.message_service import MessageService
 from rest_framework import serializers
-from apps.chat.models import Conversation, Message, MessageStatus ,ConversationParticipant
 
+from apps.chat.models import (
+    Conversation,
+    ConversationParticipant,
+    Message,
+    MessageStatus,
+)
 
+from apps.chat.services.message_service import MessageService
 
 
 # =====================================================
-# MEMBER SERIALIZER
+# CONVERSATION MEMBER SERIALIZER
 # =====================================================
 
-class ConversationMemberSerializer(serializers.ModelSerializer):
+class ConversationMemberSerializer(
+    serializers.ModelSerializer
+):
 
     name = serializers.CharField(
         source="membership.user.username",
@@ -19,14 +26,19 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
 
     class Meta:
+
         model = ConversationParticipant
+
         fields = [
             "membership_id",
             "name",
             "avatar",
         ]
 
-    def get_avatar(self, obj):
+    def get_avatar(
+        self,
+        obj,
+    ):
 
         profile = getattr(
             obj.membership.user,
@@ -34,28 +46,58 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
             None,
         )
 
-        if profile and profile.avatar:
+        if (
+            profile and
+            profile.avatar
+        ):
+
             return profile.avatar.url
 
         return None
-    
 
-class ConversationSerializer(serializers.ModelSerializer):
+
+# =====================================================
+# CONVERSATION SERIALIZER
+# =====================================================
+
+class ConversationSerializer(
+    serializers.ModelSerializer
+):
 
     display_name = serializers.SerializerMethodField()
+
     last_message = serializers.SerializerMethodField()
-    other_membership_id = serializers.SerializerMethodField()
-    participant_ids = serializers.SerializerMethodField()
-    unread_count = serializers.SerializerMethodField()
-    my_membership_id = serializers.SerializerMethodField()
-    last_seen = serializers.SerializerMethodField()
 
-    members = serializers.SerializerMethodField()
+    other_membership_id = (
+        serializers.SerializerMethodField()
+    )
 
-    # ✅ ADD THIS
-    member_count = serializers.SerializerMethodField()
+    participant_ids = (
+        serializers.SerializerMethodField()
+    )
+
+    unread_count = (
+        serializers.SerializerMethodField()
+    )
+
+    my_membership_id = (
+        serializers.SerializerMethodField()
+    )
+
+    last_seen = (
+        serializers.SerializerMethodField()
+    )
+
+    members = (
+        serializers.SerializerMethodField()
+    )
+
+    member_count = (
+        serializers.SerializerMethodField()
+    )
 
     class Meta:
+
         model = Conversation
 
         fields = [
@@ -69,17 +111,18 @@ class ConversationSerializer(serializers.ModelSerializer):
             "unread_count",
             "my_membership_id",
             "last_seen",
-
             "members",
-
-            # ✅ ADD THIS
             "member_count",
         ]
 
     # =====================================================
     # MEMBERS
     # =====================================================
-    def get_members(self, obj):
+
+    def get_members(
+        self,
+        obj,
+    ):
 
         participants = (
             obj.participants
@@ -90,89 +133,201 @@ class ConversationSerializer(serializers.ModelSerializer):
             .all()
         )
 
-        return ConversationMemberSerializer(
-            participants,
-            many=True,
-        ).data
+        return (
+            ConversationMemberSerializer(
+                participants,
+                many=True,
+            ).data
+        )
 
     # =====================================================
     # LAST SEEN
     # =====================================================
-    def get_last_seen(self, obj):
 
-        request = self.context.get("request")
+    def get_last_seen(
+        self,
+        obj,
+    ):
 
-        if not request or not hasattr(request, "membership"):
+        request = self.context.get(
+            "request"
+        )
+
+        if (
+            not request or
+            not hasattr(
+                request,
+                "membership",
+            )
+        ):
+
             return None
 
-        if obj.type != Conversation.Type.DIRECT:
+        if (
+            obj.type !=
+            Conversation.Type.DIRECT
+        ):
+
             return None
 
-        other = (
+        other_participant = (
             obj.participants
-            .exclude(membership=request.membership)
-            .select_related("membership")
-            .only("membership__last_seen")
+            .exclude(
+                membership=request.membership
+            )
+            .select_related(
+                "membership",
+            )
+            .only(
+                "membership__last_seen",
+            )
             .first()
         )
 
-        return other.membership.last_seen if other else None
+        if not other_participant:
+            return None
+
+        return (
+            other_participant
+            .membership
+            .last_seen
+        )
 
     # =====================================================
-    # OTHER MEMBERSHIP
+    # OTHER MEMBERSHIP ID
     # =====================================================
-    def get_other_membership_id(self, obj):
 
-        if obj.type == Conversation.Type.DIRECT:
+    def get_other_membership_id(
+        self,
+        obj,
+    ):
 
-            request = self.context.get("request")
+        if (
+            obj.type !=
+            Conversation.Type.DIRECT
+        ):
 
-            return (
-                obj.participants
-                .exclude(membership=request.membership)
-                .values_list(
-                    "membership_id",
-                    flat=True,
-                )
-                .first()
+            return None
+
+        request = self.context.get(
+            "request"
+        )
+
+        if (
+            not request or
+            not hasattr(
+                request,
+                "membership",
             )
+        ):
 
-        return None
+            return None
+
+        return (
+            obj.participants
+            .exclude(
+                membership=request.membership
+            )
+            .values_list(
+                "membership_id",
+                flat=True,
+            )
+            .first()
+        )
 
     # =====================================================
     # DISPLAY NAME
     # =====================================================
-    def get_display_name(self, obj):
 
-        request = self.context.get("request")
+    def get_display_name(
+        self,
+        obj,
+    ):
 
-        if not request or not hasattr(request, "membership"):
-            return "User"
+        request = self.context.get(
+            "request"
+        )
 
-        current_membership = request.membership
+        if (
+            not request or
+            not hasattr(
+                request,
+                "membership",
+            )
+        ):
 
-        if obj.type == Conversation.Type.DIRECT:
+            return "Chat"
 
-            other = (
+        current_membership = (
+            request.membership
+        )
+
+        # =================================================
+        # DIRECT CHAT
+        # =================================================
+
+        if (
+            obj.type ==
+            Conversation.Type.DIRECT
+        ):
+
+            other_participant = (
                 obj.participants
-                .exclude(membership=current_membership)
-                .select_related("membership__user")
-                .only("membership__user__username")
+                .exclude(
+                    membership=current_membership
+                )
+                .select_related(
+                    "membership__user",
+                )
+                .only(
+                    "membership__user__username",
+                )
                 .first()
             )
 
+            if not other_participant:
+                return "User"
+
             return (
-                other.membership.user.username
-                if other else "User"
+                other_participant
+                .membership
+                .user
+                .username
             )
 
-        if obj.type == Conversation.Type.GROUP:
-            return obj.name or "Group Chat"
+        # =================================================
+        # GROUP CHAT
+        # =================================================
 
-        if obj.type == Conversation.Type.DEPARTMENT:
+        if (
+            obj.type ==
+            Conversation.Type.GROUP
+        ):
+
             return (
-                obj.department.name
-                if obj.department else "Department Chat"
+                obj.name
+                or "Group Chat"
+            )
+
+        # =================================================
+        # DEPARTMENT CHAT
+        # =================================================
+
+        if (
+            obj.type ==
+            Conversation.Type.DEPARTMENT
+        ):
+
+            department = getattr(
+                obj,
+                "managed_department",
+                None,
+            )
+
+            return (
+                department.name
+                if department
+                else "Department Chat"
             )
 
         return "Chat"
@@ -180,17 +335,25 @@ class ConversationSerializer(serializers.ModelSerializer):
     # =====================================================
     # LAST MESSAGE
     # =====================================================
-    def get_last_message(self, obj):
 
-        return (
-            obj.last_message.content
-            if obj.last_message else None
-        )
+    def get_last_message(
+        self,
+        obj,
+    ):
+
+        if not obj.last_message:
+            return None
+
+        return obj.last_message.content
 
     # =====================================================
-    # PARTICIPANTS
+    # PARTICIPANT IDS
     # =====================================================
-    def get_participant_ids(self, obj):
+
+    def get_participant_ids(
+        self,
+        obj,
+    ):
 
         return list(
             obj.participants.values_list(
@@ -202,38 +365,76 @@ class ConversationSerializer(serializers.ModelSerializer):
     # =====================================================
     # UNREAD COUNT
     # =====================================================
-    def get_unread_count(self, obj):
 
-        request = self.context.get("request")
+    def get_unread_count(
+        self,
+        obj,
+    ):
 
-        if not request or not hasattr(request, "membership"):
+        request = self.context.get(
+            "request"
+        )
+
+        if (
+            not request or
+            not hasattr(
+                request,
+                "membership",
+            )
+        ):
+
             return 0
 
-        participant = obj.participants.filter(
-            membership=request.membership
-        ).first()
-
-        return (
-            participant.unread_count
-            if participant else 0
+        participant = (
+            obj.participants
+            .filter(
+                membership=request.membership,
+            )
+            .first()
         )
 
-    # =====================================================
-    # MY MEMBERSHIP
-    # =====================================================
-    def get_my_membership_id(self, obj):
+        if not participant:
+            return 0
 
-        request = self.context.get("request")
+        return participant.unread_count
+
+    # =====================================================
+    # MY MEMBERSHIP ID
+    # =====================================================
+
+    def get_my_membership_id(
+        self,
+        obj,
+    ):
+
+        request = self.context.get(
+            "request"
+        )
+
+        if (
+            not request or
+            not hasattr(
+                request,
+                "membership",
+            )
+        ):
+
+            return None
+
+        return request.membership.id
+
+    # =====================================================
+    # MEMBER COUNT
+    # =====================================================
+
+    def get_member_count(
+        self,
+        obj,
+    ):
 
         return (
-            request.membership.id
-            if request and hasattr(request, "membership")
-            else None
+            obj.participants.count()
         )
-    
-    def get_member_count(self, obj):
-
-      return obj.participants.count()
 
 class MessageSerializer(serializers.ModelSerializer):
 

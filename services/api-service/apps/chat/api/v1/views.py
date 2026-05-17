@@ -36,20 +36,40 @@ class ChatPagination(PageNumberPagination):
     page_size_query_param = "page_size"
 
 
+
 class ConversationListView(BaseCompanyAPIView):
 
     def get(self, request):
-        conversations = ChatService.list_conversations(
-            membership=request.membership
+
+        search = request.query_params.get(
+            "search",
+            "",
+        )
+
+        conversation_type = request.query_params.get(
+            "type",
+            "all",
+        )
+
+        conversations = (
+            ChatService.list_conversations(
+                membership=request.membership,
+                search=search,
+                conversation_type=conversation_type,
+            )
         )
 
         serializer = ConversationSerializer(
             conversations,
             many=True,
-            context={"request": request},
+            context={
+                "request": request,
+            },
         )
 
-        return ApiResponse.success(data=serializer.data)
+        return ApiResponse.success(
+            data=serializer.data,
+        )
 
 
 class DirectChatView(BaseCompanyAPIView):
