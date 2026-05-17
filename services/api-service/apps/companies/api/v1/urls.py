@@ -15,6 +15,7 @@ from apps.companies.api.v1.views.InviteView import (
     InviteDetailsAPI,
     InviteEmployeeAPI,
 )
+from apps.companies.api.v1.views.department_membership_view import DepartmentAssignMemberAPI, DepartmentRemoveMemberAPI, DepartmentTransferMemberAPI
 
 urlpatterns = [
     path("invite/users/", InviteEmployeeAPI.as_view(), name="invite-employee"),
@@ -41,8 +42,37 @@ urlpatterns = [
         EmployeeUnBlockAPI.as_view(),
         name="emplyee-unblock-api",
     ),
-    path("departments/", DepartmentListAPI.as_view(), name="department-list"),
+       path(
+        "departments/",
+        DepartmentListAPI.as_view(),
+        name="department-list",
+    ),
+
     path(
-        "departments/<int:pk>/", DepartmentDetailAPI.as_view(), name="department-detail"
+        "departments/<int:pk>/",
+        DepartmentDetailAPI.as_view(),
+        name="department-detail",
+    ),
+
+    # =====================================================
+    # MEMBERSHIP MANAGEMENT
+    # =====================================================
+
+    path(
+        "departments/<int:pk>/assign-member/",
+        DepartmentAssignMemberAPI.as_view(),
+        name="department-assign-member",
+    ),
+
+    path(
+        "departments/<int:pk>/remove-member/",
+        DepartmentRemoveMemberAPI.as_view(),
+        name="department-remove-member",
+    ),
+
+    path(
+        "departments/<int:pk>/transfer-member/",
+        DepartmentTransferMemberAPI.as_view(),
+        name="department-transfer-member",
     ),
 ]

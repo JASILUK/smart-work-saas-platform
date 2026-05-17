@@ -41,3 +41,5 @@ flake8==7.0.0
 isort==5.13.2
 django-debug-toolbar==4.3.0
 django-extensions==3.2.3
+
+firebase-admin==6.5.0
