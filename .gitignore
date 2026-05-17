@@ -29,3 +29,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# Firebase
+service-account.json
+firebase/service-account.json
+services/api-service/firebase/service-account.json
