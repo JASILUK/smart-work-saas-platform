@@ -1,6 +1,6 @@
 from django.urls import path
-from apps.chat.consumers.tanent_consumer import TenantConsumer
-from apps.chat.consumers.PlatformConsumer import PlatformConsumer
+from apps.realtime.consumers.tanent_consumer import TenantConsumer
+from apps.realtime.consumers.PlatformConsumer import PlatformConsumer
 
 
 

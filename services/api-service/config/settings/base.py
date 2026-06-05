@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "apps.core_platform",
     "apps.notifications",
     "apps.meetings",
+    "apps.reminders",
 
 ]
 
@@ -260,6 +261,12 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 CELERY_BROKER_URL = f"{REDIS_URL}/0"
 CELERY_RESULT_BACKEND = f"{REDIS_URL}/1"
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+CELERY_BEAT_SCHEDULER = (
+    "django_celery_beat.schedulers:DatabaseScheduler"
+)
+
 
 CELERY_ACCEPT_CONTENT = ["json"]
 
@@ -279,3 +286,9 @@ cloudinary.config(
 FIREBASE_CREDENTIALS = os.getenv(
     "FIREBASE_CREDENTIALS"
 )
+
+LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")

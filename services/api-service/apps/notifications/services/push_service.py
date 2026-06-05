@@ -3,16 +3,18 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from django.conf import settings
-
+from django.db import transaction
 import redis
 
 from apps.notifications.models import (
     NotificationDevice,
 )
-
 from apps.notifications.tasks.push_tasks import (
     send_push_notification_task,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 redis_client = redis.Redis.from_url(
@@ -35,19 +37,32 @@ class PushService:
         room_id=None,
     ):
 
-        # ================================================
-        # SMART PUSH ELIGIBILITY
-        # ================================================
+        logger.info(
+            "[PUSH] Start membership=%s notification=%s room_id=%s",
+            membership.id,
+            notification.id,
+            room_id,
+        )
 
-        if not PushService.should_send_push(
+        allowed = PushService.should_send_push(
             membership=membership,
             room_id=room_id,
-        ):
-            return
+        )
 
-        # ================================================
-        # ACTIVE DEVICES
-        # ================================================
+        logger.info(
+            "[PUSH] Eligibility result=%s membership=%s",
+            allowed,
+            membership.id,
+        )
+
+        if not allowed:
+
+            logger.warning(
+                "[PUSH] Blocked by eligibility membership=%s",
+                membership.id,
+            )
+
+            return
 
         devices = (
             NotificationDevice.objects
@@ -62,21 +77,36 @@ class PushService:
             )
         )
 
-        if not devices.exists():
-            return
+        device_count = devices.count()
 
-        # ================================================
-        # ENQUEUE PUSH TASKS
-        # ================================================
+        logger.info(
+            "[PUSH] Active devices=%s membership=%s",
+            device_count,
+            membership.id,
+        )
+
+        if device_count == 0:
+
+            logger.warning(
+                "[PUSH] No active devices membership=%s",
+                membership.id,
+            )
+
+            return
 
         for device in devices:
 
-            send_push_notification_task.delay(
-                device_id=str(device.id),
-                notification_id=str(
-                    notification.id
-                ),
-            )
+            current_device_id = str(device.id)
+            current_notification_id = str(notification.id)
+
+            transaction.on_commit(
+                lambda d=current_device_id,
+                    n=current_notification_id:
+                send_push_notification_task.delay(
+                    device_id=d,
+                    notification_id=n,
+                )
+            )   
 
     # =====================================================
     # PUSH ELIGIBILITY
@@ -104,8 +134,14 @@ class PushService:
             )
         )
 
+        logger.info(
+            "[PUSH] Online check membership=%s online=%s",
+            membership.id,
+            is_online,
+        )
+
         # ================================================
-        # OFFLINE USERS SHOULD RECEIVE PUSH
+        # OFFLINE USER
         # ================================================
 
         if not is_online:
@@ -133,8 +169,14 @@ class PushService:
             )
         )
 
+        logger.info(
+            "[PUSH] Room check room=%s inside=%s",
+            room_id,
+            inside_room,
+        )
+
         # ================================================
-        # USER IS ALREADY INSIDE ROOM
+        # USER ALREADY INSIDE CHAT ROOM
         # ================================================
 
         if inside_room:

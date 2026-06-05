@@ -4,6 +4,10 @@ from integrations.firebase import (
     initialize_firebase,
 )
 
+from apps.notifications.models import (
+    NotificationDevice,
+)
+
 
 class FirebaseProvider:
 
@@ -86,13 +90,50 @@ class FirebaseProvider:
                 "provider_id": response,
             }
 
-        except Exception as exc:
+        # =================================================
+        # TOKEN NO LONGER VALID
+        # =================================================
+
+        except messaging.UnregisteredError:
+
+            NotificationDevice.objects.filter(
+                token=token,
+            ).update(
+                is_active=False,
+            )
 
             return {
 
                 "success": False,
 
-                "error": str(exc),
+                "error": (
+                    "Device unregistered."
+                ),
+
+                "type": (
+                    "UnregisteredError"
+                ),
+            }
+
+        # =================================================
+        # OTHER FIREBASE ERRORS
+        # =================================================
+
+        except Exception as exc:
+
+            import traceback
+
+            traceback.print_exc()
+
+            return {
+
+                "success": False,
+
+                "error": repr(exc),
+
+                "type": (
+                    type(exc).__name__
+                ),
             }
 
     # =====================================================
@@ -143,6 +184,28 @@ class FirebaseProvider:
                 )
             )
 
+            # =============================================
+            # DEACTIVATE INVALID TOKENS
+            # =============================================
+
+            for index, result in enumerate(
+                response.responses
+            ):
+
+                if result.success:
+                    continue
+
+                if isinstance(
+                    result.exception,
+                    messaging.UnregisteredError,
+                ):
+
+                    NotificationDevice.objects.filter(
+                        token=tokens[index],
+                    ).update(
+                        is_active=False,
+                    )
+
             return {
 
                 "success": True,
@@ -158,9 +221,17 @@ class FirebaseProvider:
 
         except Exception as exc:
 
+            import traceback
+
+            traceback.print_exc()
+
             return {
 
                 "success": False,
 
-                "error": str(exc),
+                "error": repr(exc),
+
+                "type": (
+                    type(exc).__name__
+                ),
             }

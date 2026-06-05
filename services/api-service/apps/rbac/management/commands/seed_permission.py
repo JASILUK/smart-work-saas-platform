@@ -113,6 +113,90 @@ PERMISSIONS = [
     ("tenant.project.view", "View Project", "View project", "Projects", "tenant"),
     ("tenant.project.update", "Update Project", "Edit project", "Projects", "tenant"),
     ("tenant.project.delete", "Delete Project", "Delete project", "Projects", "tenant"),
+
+    # Meating 
+    (
+    "tenant.meeting.create",
+    "Create Meeting",
+    "Create meetings",
+    "Meetings",
+    "tenant",
+    ),
+
+    (
+        "tenant.meeting.view",
+        "View Meetings",
+        "View meetings",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.update",
+        "Update Meeting",
+        "Update meetings",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.cancel",
+        "Cancel Meeting",
+        "Cancel meetings",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.start",
+        "Start Meeting",
+        "Start meeting sessions",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.join",
+        "Join Meeting",
+        "Join meetings",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.invite",
+        "Invite Participants",
+        "Invite meeting participants",
+        "Meetings",
+        "tenant",
+    ),
+
+    (
+        "tenant.meeting.manage",
+        "Manage Meetings",
+        "Full meeting management",
+        "Meetings",
+        "tenant",
+    ),
+
+    # Attendance
+    (
+    "tenant.attendance.view",
+    "View Attendance",
+    "View attendance records",
+    "Attendance",
+    "tenant",
+    ),
+
+    (
+        "tenant.attendance.manage",
+        "Manage Attendance",
+        "Manage attendance records",
+        "Attendance",
+        "tenant",
+    ),
+
+
     # Tenant Billing
     (
         "tenant.subscription.view",

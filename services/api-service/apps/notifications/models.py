@@ -104,10 +104,14 @@ class NotificationPreference(TimeStampedModel):
     )
 
     # =====================================================
-    # GLOBAL TOGGLES
+    # GLOBAL CHANNEL TOGGLES
     # =====================================================
 
     push_enabled = models.BooleanField(
+        default=True,
+    )
+
+    email_enabled = models.BooleanField(
         default=True,
     )
 
