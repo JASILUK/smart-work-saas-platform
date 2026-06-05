@@ -28,6 +28,8 @@ class DeviceService:
 
         token = (token or "").strip()
 
+        platform = (platform or "").strip()
+
         device_name = (
             (device_name or "").strip()
             or "Unknown Device"
@@ -53,6 +55,12 @@ class DeviceService:
 
             raise ApplicationError(
                 "Invalid device token."
+            )
+
+        if not platform:
+
+            raise ApplicationError(
+                "Platform is required."
             )
 
         # =================================================
@@ -125,10 +133,6 @@ class DeviceService:
             raise ApplicationError(
                 "Device not found."
             )
-
-        # =================================================
-        # DEACTIVATE
-        # =================================================
 
         device.is_active = False
 

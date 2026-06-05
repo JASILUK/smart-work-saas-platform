@@ -46,6 +46,7 @@ class NotificationPreferenceSerializer(
 
         fields = [
             "push_enabled",
+            "email_enabled",
             "sound_enabled",
             "chat_message_enabled",
             "mention_enabled",

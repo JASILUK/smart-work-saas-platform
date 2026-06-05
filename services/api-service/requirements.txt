@@ -30,6 +30,10 @@ twilio==8.2.2
 pyotp==2.9.0
 qrcode==7.4.2
 
+
+# RTC / LiveKit
+livekit-api==0.8.2
+
 # 🔥 Cloudinary (Media)
 cloudinary==1.37.0
 requests>=2.31.0

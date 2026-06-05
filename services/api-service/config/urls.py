@@ -27,4 +27,5 @@ urlpatterns = [
     path("api/platform/v1/", include("apps.rbac.api.v1.urls")),
     path("api/chat/v1/",include("apps.chat.api.v1.urls")),
     path("api/notification/v1/",include("apps.notifications.api.v1.urls")),
+    path("api/meetings/v1/", include("apps.meetings.api.v1.urls"))
 ]
