@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "apps.chat",
     "apps.core_platform",
     "apps.notifications",
+    "apps.calendars",
     "apps.meetings",
     "apps.reminders",
 
@@ -256,7 +257,7 @@ LOGO_URL = "https://yourcdn.com/logo.png"
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-
+GOOGLE_CALENDAR_REDIRECT_URI = os.getenv("GOOGLE_CALENDAR_REDIRECT_URI")
 
 
 CELERY_BROKER_URL = f"{REDIS_URL}/0"

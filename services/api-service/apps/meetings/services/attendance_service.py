@@ -35,6 +35,11 @@ class MeetingAttendanceService:
         if not participant:
             return None
 
+        # Already present → ignore duplicate join
+
+        if participant.is_present:
+            return participant
+
         now = timezone.now()
 
         # ================================================
@@ -120,6 +125,11 @@ class MeetingAttendanceService:
         if not participant:
             return None
 
+        # Already left → ignore duplicate leave
+
+        if not participant.is_present:
+            return participant
+        
         now = timezone.now()
 
         # ================================================
@@ -176,9 +186,9 @@ class MeetingAttendanceService:
                 meeting_duration_seconds
             ) * 100
 
-            participant.attendance_percentage = round(
-                attendance_percentage,
-                2,
+            participant.attendance_percentage = min(
+                round(attendance_percentage, 2),
+                100,
             )
 
         # ================================================
@@ -195,7 +205,7 @@ class MeetingAttendanceService:
                 "full_attendance"
             )
 
-        elif percentage >= 30:
+        elif percentage >= 50:
 
             participant.attendance_status = (
                 "present"

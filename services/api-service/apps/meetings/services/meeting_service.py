@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
+from apps.calendars.services.calendar_registration_service import CalendarRegistrationService
 from apps.meetings.models.meeting import (
     Meeting,
 )
@@ -251,6 +252,19 @@ class MeetingService:
                 ),
             )
 
+
+            transaction.on_commit(
+
+                lambda:
+
+                CalendarRegistrationService.register(
+
+                    membership=membership,
+
+                    content_object=meeting,
+                )
+            )
+
         return meeting
 
     # =====================================================
@@ -382,6 +396,16 @@ class MeetingService:
                 ),
             )
 
+
+        transaction.on_commit(
+
+            lambda:
+
+            CalendarRegistrationService.resync(
+                content_object=meeting,
+            )
+        )
+
         return meeting
 
     # =====================================================
@@ -436,4 +460,13 @@ class MeetingService:
             meeting=meeting,
         )
 
+
+        transaction.on_commit(
+
+            lambda:
+
+            CalendarRegistrationService.mark_for_deletion(
+                content_object=meeting,
+            )
+        )
         return meeting

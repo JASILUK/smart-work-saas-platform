@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from asgiref.sync import async_to_sync
 
 from apps.meetings.models.meeting import (
     Meeting,
@@ -21,6 +22,7 @@ from apps.meetings.selectors.participant_selectors import (
 from apps.meetings.integrations.rtc.factory import (
     RTCProviderFactory,
 )
+from apps.meetings.services.attendance_service import MeetingAttendanceService
 
 
 class MeetingSessionService:
@@ -498,4 +500,10 @@ class MeetingSessionService:
             ]
         )
 
+
+        async_to_sync(
+                MeetingAttendanceService.finalize_meeting_attendance
+            )(
+                meeting=meeting
+            )
         return session
