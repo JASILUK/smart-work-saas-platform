@@ -140,7 +140,26 @@ class Department(TimeStampedModel):
         return self.name
 
 
+
 class Membership(TimeStampedModel):
+
+    # =====================================================
+    # WORK MODE
+    # =====================================================
+
+    class WorkMode(models.TextChoices):
+
+        OFFICE = "office", "Office"
+
+        REMOTE = "remote", "Remote"
+
+        HYBRID = "hybrid", "Hybrid"
+
+        FIELD = "field", "Field"
+
+    # =====================================================
+    # USER
+    # =====================================================
 
     user = models.ForeignKey(
         User,
@@ -171,6 +190,10 @@ class Membership(TimeStampedModel):
         related_name="members",
     )
 
+    # =====================================================
+    # EMPLOYMENT
+    # =====================================================
+
     job_title = models.CharField(
         max_length=150,
         null=True,
@@ -182,9 +205,19 @@ class Membership(TimeStampedModel):
         blank=True,
     )
 
+    work_mode = models.CharField(
+        max_length=20,
+        choices=WorkMode.choices,
+        default=WorkMode.OFFICE,
+    )
+
     is_active = models.BooleanField(
         default=True,
     )
+
+    # =====================================================
+    # TIMESTAMPS
+    # =====================================================
 
     joined_at = models.DateTimeField(
         auto_now_add=True,
@@ -195,6 +228,10 @@ class Membership(TimeStampedModel):
         blank=True,
     )
 
+    # =====================================================
+    # META
+    # =====================================================
+
     class Meta:
 
         unique_together = [
@@ -202,9 +239,22 @@ class Membership(TimeStampedModel):
         ]
 
         indexes = [
-            models.Index(fields=["company"]),
-            models.Index(fields=["department"]),
-            models.Index(fields=["is_active"]),
+
+            models.Index(
+                fields=["company"],
+            ),
+
+            models.Index(
+                fields=["department"],
+            ),
+
+            models.Index(
+                fields=["is_active"],
+            ),
+
+            models.Index(
+                fields=["work_mode"],
+            ),
         ]
 
     def __str__(self):
@@ -213,6 +263,8 @@ class Membership(TimeStampedModel):
             f"{self.user} - "
             f"{self.company}"
         )
+    
+
 
 
 class CompanyInvite(TimeStampedModel):

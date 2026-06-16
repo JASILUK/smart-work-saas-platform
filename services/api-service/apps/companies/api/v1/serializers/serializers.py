@@ -55,36 +55,96 @@ class InviteTokenSerializer(serializers.Serializer):
 
 class EmployeeSerializer(serializers.ModelSerializer):
 
-    user_email = serializers.EmailField(source="user.email", read_only=True)
-    username = serializers.CharField(source="user.username", read_only=True)
-    role_name = serializers.CharField(source="role.name", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True)
+    user_email = serializers.EmailField(
+        source="user.email",
+        read_only=True,
+    )
+
+    username = serializers.CharField(
+        source="user.username",
+        read_only=True,
+    )
+
+    role_name = serializers.CharField(
+        source="role.name",
+        read_only=True,
+    )
+
+    department_name = serializers.CharField(
+        source="department.name",
+        read_only=True,
+    )
+
+    work_mode_display = serializers.CharField(
+        source="get_work_mode_display",
+        read_only=True,
+    )
 
     class Meta:
+
         model = Membership
+
         fields = [
+
             "id",
+
             "user_email",
+
             "username",
+
             "role",
             "role_name",
+
             "department",
             "department_name",
-            "is_active",
+
             "job_title",
+
+            "work_mode",
+            "work_mode_display",
+
+            "is_active",
         ]
 
 
-class EmployeeUpdateSerializer(serializers.Serializer):
 
-    role_id = serializers.IntegerField(required=False)
-    department_id = serializers.IntegerField(required=False)
-    name = serializers.CharField(required=False)
-    title = serializers.CharField(required=False)
 
-    def validate(self, data):
+class EmployeeUpdateSerializer(
+    serializers.Serializer
+):
+
+    role_id = serializers.IntegerField(
+        required=False,
+    )
+
+    department_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+    )
+
+    name = serializers.CharField(
+        required=False,
+    )
+
+    title = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    work_mode = serializers.ChoiceField(
+        choices=Membership.WorkMode.choices,
+        required=False,
+    )
+
+    def validate(
+        self,
+        data,
+    ):
 
         if not data:
-            raise serializers.ValidationError("No fields provided for update.")
+
+            raise serializers.ValidationError(
+                "No fields provided for update."
+            )
 
         return data
