@@ -161,96 +161,48 @@ class HolidayImportService:
                 )
             )
 
+            # =====================================================
+            # CHANGER INSIDE: HolidayImportService.import_holidays
+            # =====================================================
+
+            # Locate this inner conditional block inside your fetched_holidays loop:
             if existing_holiday:
-
                 if not overwrite_existing:
-
                     skipped_count += 1
-
                     continue
 
                 has_changes = False
+                
+                # FIXED: Initialize as empty list. Let TimeStampedModel handle the timestamps automatically!
+                update_fields = []
 
-                update_fields = [
-                    "modified",
-                ]
-
-                if (
-                    existing_holiday.holiday_type
-                    != holiday_type
-                ):
-
-                    existing_holiday.holiday_type = (
-                        holiday_type
-                    )
-
-                    update_fields.append(
-                        "holiday_type",
-                    )
-
+                if existing_holiday.holiday_type != holiday_type:
+                    existing_holiday.holiday_type = holiday_type
+                    update_fields.append("holiday_type")
                     has_changes = True
 
-                if (
-                    existing_holiday.is_paid
-                    != is_paid
-                ):
-
-                    existing_holiday.is_paid = (
-                        is_paid
-                    )
-
-                    update_fields.append(
-                        "is_paid",
-                    )
-
+                if existing_holiday.is_paid != is_paid:
+                    existing_holiday.is_paid = is_paid
+                    update_fields.append("is_paid")
                     has_changes = True
 
-                if (
-                    existing_holiday.external_id
-                    != external_id
-                ):
-
-                    existing_holiday.external_id = (
-                        external_id
-                    )
-
-                    update_fields.append(
-                        "external_id",
-                    )
-
+                if existing_holiday.external_id != external_id:
+                    existing_holiday.external_id = external_id
+                    update_fields.append("external_id")
                     has_changes = True
 
-                if (
-                    existing_holiday.provider
-                    != provider_key
-                ):
-
-                    existing_holiday.provider = (
-                        provider_key
-                    )
-
-                    update_fields.append(
-                        "provider",
-                    )
-
+                if existing_holiday.provider != provider_key:
+                    existing_holiday.provider = provider_key
+                    update_fields.append("provider")
                     has_changes = True
 
                 if has_changes:
-
-                    setattr(
-                        existing_holiday,
-                        "_update_fields",
-                        update_fields,
-                    )
-
-                    holidays_to_update.append(
-                        existing_holiday,
-                    )
-
+                    # Include modified dynamically only if your concrete base class permits it, 
+                    # otherwise leave it out as Django will handle it natively.
+                    setattr(existing_holiday, "_update_fields", update_fields)
+                    holidays_to_update.append(existing_holiday)
                     updated_count += 1
-
                 else:
-
                     skipped_count += 1
 
             else:

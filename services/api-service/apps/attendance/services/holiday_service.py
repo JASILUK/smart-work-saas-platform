@@ -39,10 +39,11 @@ class HolidayService:
             )
         return holiday
 
+
+
     # =====================================================
     # UPDATE HOLIDAY
     # =====================================================
-
     @staticmethod
     def update_holiday(
         *,
@@ -57,6 +58,7 @@ class HolidayService:
         name = validated_data.get("name", holiday.name)
         holiday_date = validated_data.get("holiday_date", holiday.holiday_date)
 
+        # 1. Uniqueness Validation Pre-flight check
         if name != holiday.name or holiday_date != holiday.holiday_date:
             duplicate_exists = Holiday.objects.filter(
                 company=holiday.company,
@@ -67,18 +69,29 @@ class HolidayService:
             if duplicate_exists:
                 raise ValidationError("This holiday already exists.")
 
+        # 2. Explicit Whitelist Processing 
+        # Checking "if field in validated_data" ensures that falsy values 
+        # like empty strings ("") or explicit booleans (False) are caught and updated.
         update_fields = []
-        for field, value in validated_data.items():
-            if hasattr(holiday, field):
-                setattr(holiday, field, value)
+        allowed_fields = ["name", "holiday_type", "holiday_date", "description", "is_paid", "is_half_day"]
+
+        for field in allowed_fields:
+            if field in validated_data:
+                setattr(holiday, field, validated_data[field])
                 update_fields.append(field)
 
+        # 3. Handle Auto-updating Fields Safely
         if update_fields:
+            # If your TimeStampedModel requires explicit tracking injection for modified fields:
             if hasattr(holiday, "modified"):
+                # Do not add it to update_fields if your base class throws concrete/non-concrete field errors.
+                # If your base model has an auto_now field, Django updates it automatically *unless* # update_fields is passed, in which case it MUST be explicitly included if you want it saved.
                 update_fields.append("modified")
+                
             holiday.save(update_fields=update_fields)
 
         return holiday
+
 
     # =====================================================
     # DELETE HOLIDAY

@@ -3,7 +3,8 @@ from typing import Optional
 from django.db.models import QuerySet
 from django.utils import timezone
 from apps.attendance.models import Holiday
-
+from django.db.models import Count, Q
+from django.utils.timezone import localdate
 
 # =====================================================
 # BASE QUERYSET
@@ -61,6 +62,19 @@ def get_company_holidays(*, company) -> QuerySet[Holiday]:
     to a specific company tenant.
     """
     return get_queryset().filter(company=company)
+
+def get_holiday_metrics(queryset) -> dict:
+    """
+    Calculates aggregate operational metrics across a filtered holiday scope.
+    Keeps database math out of the view layer.
+    """
+    today = localdate()
+    return queryset.aggregate(
+        total=Count("id"),
+        paid=Count("id", filter=Q(is_paid=True)),
+        half_day=Count("id", filter=Q(is_half_day=True)),
+        upcoming=Count("id", filter=Q(holiday_date__gte=today))
+    )
 
 
 def get_upcoming_holidays(*, company) -> QuerySet[Holiday]:
