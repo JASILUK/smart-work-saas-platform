@@ -1,6 +1,12 @@
 from django.urls import path
 
 # Core Work Schedule Management Views
+from apps.attendance.api.v1.views.attendance_access_views import AttendanceAccessResolutionAPI, AttendanceAccessRuleDetailAPI, AttendanceAccessRuleListCreateAPI, CompanyAttendanceDefaultAPI, EmployeeAttendanceOverrideDetailAPI, EmployeeAttendanceOverrideListCreateAPI
+from apps.attendance.api.v1.views.attendance_event_views import AttendanceBreakInAPI, AttendanceBreakOutAPI, AttendanceCheckInAPI, AttendanceCheckOutAPI, AttendanceEventDetailAPI, AttendanceEventListAPI, LiveAttendanceSummaryAPI, ManualAttendanceAPI
+from apps.attendance.api.v1.views.attendance_location_views import ActivateAttendanceLocationAPI, AttendanceLocationDetailAPI, AttendanceLocationListCreateAPI
+from apps.attendance.api.v1.views.biometric_log_views import BiometricLogDetailAPI, BiometricLogListAPI, ManualImportAPI, PushWebhookAPI
+from apps.attendance.api.v1.views.biometric_views import BiometricDeviceActivateAPI, BiometricDeviceDetailAPI, BiometricDeviceListCreateAPI, BiometricEmployeeMappingActivateAPI, BiometricEmployeeMappingDetailAPI, BiometricEmployeeMappingListCreateAPI
+from apps.attendance.api.v1.views.company_attendance_method_views import CompanyAttendanceMethodAPI, CompanyAttendanceMethodActionAPI
 from apps.attendance.api.v1.views.company_work_schedule_api import (
     CompanyWorkScheduleAPI,
     CompanyWorkScheduleDetailAPI,
@@ -8,6 +14,8 @@ from apps.attendance.api.v1.views.company_work_schedule_api import (
 )
 
 # Core Holiday CRUD & Listing Views
+from apps.attendance.api.v1.views.daily_attendance_views import DailyAttendanceDetailAPI, DailyAttendanceFinalizeAPI, DailyAttendanceListAPI, DailyAttendanceReprocessAPI, DailyAttendanceReviewsAPI
+from apps.attendance.api.v1.views.face_enrollment_views import CompanyFaceEnrollmentPolicyAPI, EmployeeSelfEnrollmentAPI, FaceEnrollmentApproveAPI, FaceEnrollmentDetailAPI, FaceEnrollmentListAPI, FaceEnrollmentRejectAPI, FaceEnrollmentRevokeAPI, HRInstructionEnrollmentAPI
 from apps.attendance.api.v1.views.holiday_views import (
     HolidayListCreateAPI,
     HolidayDetailAPI,
@@ -200,4 +208,107 @@ urlpatterns = [
         AttendancePolicyResetAPI.as_view(),
         name="attendance-policy-reset"
     ),
+
+    path(
+            "methods/",
+            CompanyAttendanceMethodAPI.as_view(),
+            name="company-attendance-methods-overview",
+        ),
+    
+    # Focused single-method toggle switch operations
+    path(
+        "methods/<str:method_name>/",
+        CompanyAttendanceMethodActionAPI.as_view(),
+        name="company-attendance-method-soft-delete",
+    ),
+    path(
+        "methods/<str:method_name>/enable/",
+        CompanyAttendanceMethodActionAPI.as_view(),
+        name="company-attendance-method-enable",
+    ),
+
+    path(
+        "locations/", 
+        AttendanceLocationListCreateAPI.as_view(), 
+        name="attendance-locations-list-create"
+    ),
+
+    path(
+        "locations/<int:location_id>/", 
+        AttendanceLocationDetailAPI.as_view(), 
+        name="attendance-location-detail"
+    ),
+
+    path(
+        "locations/<int:location_id>/activate/",
+        ActivateAttendanceLocationAPI.as_view(), 
+        name="attendance-location-activate"
+    ),
+
+
+    path("access/defaults/", CompanyAttendanceDefaultAPI.as_view(), name="attendance-access-defaults"),
+
+    # Group Scope Structural Optimization Rules Endpoints
+    path("access/rules/", AttendanceAccessRuleListCreateAPI.as_view(), name="attendance-access-rules-list-create"),
+    path("access/rules/<int:rule_id>/", AttendanceAccessRuleDetailAPI.as_view(), name="attendance-access-rule-detail"),
+
+    # Individual Employee Exceptions Profiles Endpoints
+    path("access/overrides/", EmployeeAttendanceOverrideListCreateAPI.as_view(), name="attendance-access-overrides-list-create"),
+    path("access/overrides/<int:override_id>/", EmployeeAttendanceOverrideDetailAPI.as_view(), name="attendance-access-override-detail"),
+
+    # Real-Time Operational Resolution Matrix Engine Output Entrypoint
+    path("access/resolve/", AttendanceAccessResolutionAPI.as_view(), name="attendance-access-resolve-profile"),
+
+
+
+    path("face-enrollments/policy/", CompanyFaceEnrollmentPolicyAPI.as_view(), name="face-policy-management"),
+
+    # Submission Action Triggers
+    path("face-enrollments/self/", EmployeeSelfEnrollmentAPI.as_view(), name="face-self-enrollment"),
+    path("face-enrollments/hr/", HRInstructionEnrollmentAPI.as_view(), name="face-hr-enrollment"),
+
+    # Data Monitoring Queues and Action Targets
+    path("face-enrollments/", FaceEnrollmentListAPI.as_view(), name="face-enrollments-list"),
+    path("face-enrollments/<int:pk>/", FaceEnrollmentDetailAPI.as_view(), name="face-enrollment-detail"),
+    path("face-enrollments/<int:pk>/approve/", FaceEnrollmentApproveAPI.as_view(), name="face-enrollment-approve"),
+    path("face-enrollments/<int:pk>/reject/", FaceEnrollmentRejectAPI.as_view(), name="face-enrollment-reject"),
+    path("face-enrollments/<int:pk>/revoke/", FaceEnrollmentRevokeAPI.as_view(), name="face-enrollment-revoke"),
+
+
+    path("biometric/devices/", BiometricDeviceListCreateAPI.as_view(), name="biometric-devices-list-create"),
+    path("biometric/devices/<int:pk>/", BiometricDeviceDetailAPI.as_view(), name="biometric-device-detail"),
+    path("biometric/devices/<int:pk>/activate/", BiometricDeviceActivateAPI.as_view(), name="biometric-device-activate"),
+
+    # Users Sync Hardware Mapping Allocators Endpoints
+    path("biometric/mappings/", BiometricEmployeeMappingListCreateAPI.as_view(), name="biometric-mappings-list-create"),
+    path("biometric/mappings/<int:pk>/", BiometricEmployeeMappingDetailAPI.as_view(), name="biometric-mapping-detail"),
+    path("biometric/mappings/<int:pk>/activate/", BiometricEmployeeMappingActivateAPI.as_view(), name="biometric-mapping-activate"),
+
+    path("biometric/logs/", BiometricLogListAPI.as_view(), name="biometric-logs-list"),
+    path("biometric/logs/<int:pk>/", BiometricLogDetailAPI.as_view(), name="biometric-log-detail"),
+    
+    # Ingestion Control Channels Interface Actions
+    path("biometric/logs/import/", ManualImportAPI.as_view(), name="biometric-manual-import"),
+    path("biometric/webhooks/push/", PushWebhookAPI.as_view(), name="biometric-device-push-webhook"),
+
+
+    # Core operational tracking endpoints
+    path("punch/check-in/", AttendanceCheckInAPI.as_view(), name="attendance-check-in"),
+    path("punch/break-out/", AttendanceBreakOutAPI.as_view(), name="attendance-break-out"),
+    path("punch/break-in/", AttendanceBreakInAPI.as_view(), name="attendance-break-in"),
+    path("punch/check-out/", AttendanceCheckOutAPI.as_view(), name="attendance-check-out"),
+
+    # Reporting and administration ledger lists
+    path("punch/events/", AttendanceEventListAPI.as_view(), name="attendance-events-tracker-list"),
+    path("punch/events/<int:pk>/", AttendanceEventDetailAPI.as_view(), name="attendance-event-tracker-detail"),
+    path("punch/manual-override/", ManualAttendanceAPI.as_view(), name="attendance-manual-override-adjust"),
+    path("punch/live-summary/", LiveAttendanceSummaryAPI.as_view(), name="attendance-live-dashboard-summary"),
+
+
+    # Daily Finalization Engine Pipeline Routes
+    path("daily/", DailyAttendanceListAPI.as_view(), name="daily-attendance-summary-list"),
+    path("daily/<int:pk>/", DailyAttendanceDetailAPI.as_view(), name="daily-attendance-summary-detail"),
+    path("daily/reprocess/", DailyAttendanceReprocessAPI.as_view(), name="daily-attendance-pipeline-reprocess"),
+    path("daily/finalize/", DailyAttendanceFinalizeAPI.as_view(), name="daily-attendance-sheet-finalize"),
+    path("daily/reviews/", DailyAttendanceReviewsAPI.as_view(), name="daily-attendance-exceptions-reviews"),
 ]

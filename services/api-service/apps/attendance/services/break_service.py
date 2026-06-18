@@ -1,0 +1,36 @@
+from django.db import transaction
+from apps.companies.models import Company, Membership
+from apps.attendance.models.attendance_event import AttendanceEvent, AttendanceEventTypes
+from apps.attendance.validators.attendance_event_validator import AttendanceEventValidator
+from apps.attendance.services.method_validation_service import MethodValidationService
+from apps.attendance.services.live_attendance_service import LiveAttendanceService
+
+
+class BreakService:
+    @classmethod
+    @transaction.atomic
+    def break_out(cls, *, company: Company, membership: Membership, method: str, evidence: dict, actor: Membership) -> AttendanceEvent:
+        current_status = LiveAttendanceService.get_member_status(company=company, membership=membership)
+        AttendanceEventValidator.validate_workflow_state_transition(current_status, AttendanceEventTypes.BREAK_OUT)
+
+        context = MethodValidationService.validate_pipeline_evidence(company=company, membership=membership, method=method, evidence=evidence)
+
+        return AttendanceEvent.objects.create(
+            company=company, membership=membership, event_type=AttendanceEventTypes.BREAK_OUT,
+            attendance_method=method, location=context["location"], face_enrollment=context["face_enrollment"],
+            biometric_log=context["biometric_log"], verification_payload=context["payload"], created_by=actor
+        )
+
+    @classmethod
+    @transaction.atomic
+    def break_in(cls, *, company: Company, membership: Membership, method: str, evidence: dict, actor: Membership) -> AttendanceEvent:
+        current_status = LiveAttendanceService.get_member_status(company=company, membership=membership)
+        AttendanceEventValidator.validate_workflow_state_transition(current_status, AttendanceEventTypes.BREAK_IN)
+
+        context = MethodValidationService.validate_pipeline_evidence(company=company, membership=membership, method=method, evidence=evidence)
+
+        return AttendanceEvent.objects.create(
+            company=company, membership=membership, event_type=AttendanceEventTypes.BREAK_IN,
+            attendance_method=method, location=context["location"], face_enrollment=context["face_enrollment"],
+            biometric_log=context["biometric_log"], verification_payload=context["payload"], created_by=actor
+        )
