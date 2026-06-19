@@ -50,12 +50,19 @@ class CompanyAttendanceDefaultCreateSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AttendanceAccessRuleListSerializer(serializers.ModelSerializer):
+    # ✅ FIX: Include relational detail mappings directly in the list payload
+    allowed_methods = CompanyAttendanceMethodDetailSerializer(many=True, read_only=True)
+    allowed_locations = AttendanceLocationListSerializer(many=True, read_only=True)
     department = DepartmentMinimalSerializer(read_only=True)
 
     class Meta:
         model = AttendanceAccessRule
-        fields = ["id", "name", "scope_type", "work_mode", "department", "priority", "is_active"]
-
+        fields = [
+            "id", "name", "scope_type", "work_mode", "department", 
+            "validation_mode", "priority", "is_active", 
+            "allowed_methods", "allowed_locations" # 👈 Add these fields here!
+        ]
+        
 
 class AttendanceAccessRuleDetailSerializer(serializers.ModelSerializer):
     allowed_methods = CompanyAttendanceMethodDetailSerializer(many=True, read_only=True)

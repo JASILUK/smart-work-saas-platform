@@ -15,7 +15,7 @@ class AttendanceAccessRuleService:
         method_ids = [m.id for m in validated_data.pop("allowed_methods", [])]
         location_ids = [l.id for l in validated_data.pop("allowed_locations", [])]
 
-        AttendanceAccessRuleValidator.validate_method_and_locations(method_ids, location_ids, company)
+        AttendanceAccessValidator.validate_method_and_locations(method_ids, location_ids, company)
 
         rule = AttendanceAccessRule(company=company, **validated_data)
         if rule.is_active:

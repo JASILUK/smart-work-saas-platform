@@ -7,7 +7,7 @@ from apps.core.models import TimeStampedModel
 
 
 class ValidationModeChoices(models.TextChoices):
-    PRIMARY = "PRIMARY", _("Primary Method Only")
+    # PRIMARY = "PRIMARY", _("Primary Method Only")
     ALL = "ALL", _("All Configured Methods Required")
     ANY = "ANY", _("Any Configured Method Allowed")
 
