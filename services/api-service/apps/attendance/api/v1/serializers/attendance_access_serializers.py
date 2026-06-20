@@ -93,11 +93,17 @@ class AttendanceAccessRuleCreateSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class EmployeeAttendanceOverrideListSerializer(serializers.ModelSerializer):
+    # ✅ FIXED: Provide nested relationship objects directly to the dashboard index payload framework array
+    allowed_methods = CompanyAttendanceMethodDetailSerializer(many=True, read_only=True)
+    allowed_locations = AttendanceLocationListSerializer(many=True, read_only=True)
     membership = MembershipMinimalSerializer(read_only=True)
 
     class Meta:
         model = EmployeeAttendanceOverride
-        fields = ["id", "membership", "reason", "is_active"]
+        fields = [
+            "id", "membership", "validation_mode", "reason", 
+            "is_active", "allowed_methods", "allowed_locations"
+        ]
 
 
 class EmployeeAttendanceOverrideDetailSerializer(serializers.ModelSerializer):
@@ -107,14 +113,19 @@ class EmployeeAttendanceOverrideDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmployeeAttendanceOverride
-        fields = ["id", "membership", "validation_mode", "reason", "is_active", "allowed_methods", "allowed_locations", "created_at", "updated_at"]
+        fields = [
+            "id", "membership", "validation_mode", "reason", "is_active", 
+            "allowed_methods", "allowed_locations", "created_at", "updated_at"
+        ]
 
 
 class EmployeeAttendanceOverrideCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeAttendanceOverride
-        fields = ["membership", "validation_mode", "reason", "is_active", "allowed_methods", "allowed_locations"]
-
+        fields = [
+            "membership", "validation_mode", "reason", 
+            "is_active", "allowed_methods", "allowed_locations"
+        ]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Region: Core Resolution Outputs Shape

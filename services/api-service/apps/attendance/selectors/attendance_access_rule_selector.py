@@ -1,6 +1,7 @@
 from typing import Optional
 
 from django.db.models import QuerySet
+from django.db import models
 from apps.companies.models import Company, Membership
 from apps.attendance.models.attendance_access_rule import AttendanceAccessRule, ScopeTypeChoices
 

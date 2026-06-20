@@ -11,31 +11,92 @@ from apps.attendance.selectors.company_face_policy_selector import CompanyFaceEn
 from apps.attendance.services.company_face_policy_service import CompanyFaceEnrollmentPolicyService
 from apps.attendance.services.face_enrollment_service import FaceEnrollmentService
 from apps.attendance.api.v1.serializers.face_enrollment_serializers import (
-    CompanyFaceEnrollmentPolicyDetailSerializer, CompanyFaceEnrollmentPolicyCreateSerializer,
+    CompanyFaceEnrollmentPolicyDetailSerializer, CompanyFaceEnrollmentPolicyCreateSerializer, CompanyFaceEnrollmentPolicyUpdateSerializer,
     FaceEnrollmentListSerializer, FaceEnrollmentDetailSerializer, FaceEnrollmentCreateSerializer,
     FaceEnrollmentRejectSerializer, FaceEnrollmentRevokeSerializer
 )
 
 
 class CompanyFaceEnrollmentPolicyAPI(BaseCompanyAPIView):
-    required_permissions = {"GET": "tenant.attendance.view", "POST": "tenant.attendance.manage", "PATCH": "tenant.attendance.manage"}
+    """
+    Enterprise Orchestration Router managing tenant facial recognition registration guardrails.
+    """
+    required_permissions = {
+        "GET": "tenant.attendance.view", 
+        "POST": "tenant.attendance.manage", 
+        "PATCH": "tenant.attendance.manage",
+        "DELETE": "tenant.attendance.manage"
+    }
 
     def get(self, request: Request) -> Response:
-        instance = CompanyFaceEnrollmentPolicySelector.get_active_policy(company=request.company)
+        """
+        Returns the currently active biometric setup policy configuration.
+        """
+        instance = CompanyFaceEnrollmentPolicySelector.get_company_policy(company=request.company)
         if not instance:
             return ApiResponse.success(data=None)
+            
         return ApiResponse.success(data=CompanyFaceEnrollmentPolicyDetailSerializer(instance).data)
 
     def post(self, request: Request) -> Response:
+        """
+        Creates the initial baseline face policy. Throws an error if an active setup exists.
+        """
+        # Read operations must strictly run through selectors
+        existing_policy = CompanyFaceEnrollmentPolicySelector.get_active_policy(company=request.company)
+        if existing_policy:
+            return ApiResponse.error(
+                message="Face enrollment policy already exists. Use PATCH instead.",
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = CompanyFaceEnrollmentPolicyCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
         policy = CompanyFaceEnrollmentPolicyService.create_policy(
             company=request.company,
             policy_type=serializer.validated_data["policy_type"],
             is_active=serializer.validated_data.get("is_active", True)
         )
-        return ApiResponse.success(data=CompanyFaceEnrollmentPolicyDetailSerializer(policy).data, status=status.HTTP_201_CREATED)
+        return ApiResponse.success(
+            data=CompanyFaceEnrollmentPolicyDetailSerializer(policy).data, 
+            status=status.HTTP_201_CREATED
+        )
 
+    def patch(self, request: Request) -> Response:
+        """
+        Partially updates operational attributes on the tenant's policy rule instance.
+        """
+        policy = CompanyFaceEnrollmentPolicySelector.get_company_policy(company=request.company)
+        if not policy:
+            return ApiResponse.error(
+                message="Face enrollment policy not found.",
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = CompanyFaceEnrollmentPolicyUpdateSerializer(policy, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        updated_policy = CompanyFaceEnrollmentPolicyService.update_policy(
+            instance=policy,
+            validated_data=serializer.validated_data
+        )
+        return ApiResponse.success(data=CompanyFaceEnrollmentPolicyDetailSerializer(updated_policy).data)
+
+    def delete(self, request: Request) -> Response:
+        """
+        Executes a soft deactivation on the active biometric enrollment policy corporate-wide.
+        """
+        policy = CompanyFaceEnrollmentPolicySelector.get_active_policy(company=request.company)
+        if not policy:
+            return ApiResponse.error(
+                message="Face enrollment policy not found.",
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        CompanyFaceEnrollmentPolicyService.deactivate_policy(instance=policy)
+        return ApiResponse.success(message="Face enrollment policy deactivated successfully.")
+    
 
 class EmployeeSelfEnrollmentAPI(BaseCompanyAPIView):
     # Restricts calls to authenticated memberships active inside the target company context
@@ -91,29 +152,76 @@ class HRInstructionEnrollmentAPI(BaseCompanyAPIView):
 
 
 class FaceEnrollmentListAPI(BaseCompanyAPIView):
+    """
+    Multi-tenant endpoint for monitoring biometric profile queues.
+    - Managers view all records within the tenant company boundary.
+    - Regular employees are strictly locked to their own profiles.
+    """
     required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request: Request) -> Response:
-        records = FaceEnrollmentSelector.list_company_enrollments(company=request.company)
-        
-        # Apply filter modifiers seamlessly out of query strings
-        if "status" in request.query_params:
-            records = records.filter(status=request.query_params["status"])
-        if "membership" in request.query_params:
-            records = records.filter(membership_id=request.query_params["membership"])
-        if "source" in request.query_params:
-            records = records.filter(enrollment_source=request.query_params["source"])
+        company = request.company
+        caller_membership = request.membership
+
+        # Check if the caller has corporate administrative privileges
+        has_manage_privilege = caller_membership.role.permissions.filter(
+            code="tenant.attendance.manage"
+        ).exists()
+
+        if has_manage_privilege:
+            # Case 1: Manager evaluation scope. Apply administrative filters out of query parameters.
+            records = FaceEnrollmentSelector.list_company_enrollments(company=company)
+            
+            if "status" in request.query_params:
+                records = records.filter(status=request.query_params["status"])
+            if "membership" in request.query_params:
+                records = records.filter(membership_id=request.query_params["membership"])
+            if "source" in request.query_params:
+                records = records.filter(enrollment_source=request.query_params["source"])
+        else:
+            # Case 2: Employee self-service view scope. Force isolation to the caller's membership record.
+            # Explicitly drops query parameter filters to block membership query parameters abuse.
+            records = FaceEnrollmentSelector.list_company_enrollments(
+                company=company, 
+                membership=caller_membership
+            )
 
         return ApiResponse.success(data=FaceEnrollmentListSerializer(records, many=True).data)
 
 
 class FaceEnrollmentDetailAPI(BaseCompanyAPIView):
+    """
+    Multi-tenant details view endpoint for isolating specific record identifiers.
+    - Prevents cross-employee biometric footprint leakage using stealth 404 responses.
+    """
     required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request: Request, pk: int) -> Response:
-        record = FaceEnrollmentSelector.get_by_id(enrollment_id=pk, company=request.company)
+        company = request.company
+        caller_membership = request.membership
+
+        has_manage_privilege = caller_membership.role.permissions.filter(
+            code="tenant.attendance.manage"
+        ).exists()
+
+        if has_manage_privilege:
+            # Managers can trace any object key inside their tenant partition
+            record = FaceEnrollmentSelector.get_by_id(enrollment_id=pk, company=company)
+        else:
+            # Regular employees can only track their own record instances.
+            # If the record belongs to another worker, it falls back to a 404 to block ID guessing.
+            record = FaceEnrollmentSelector.get_by_id(
+                enrollment_id=pk, 
+                company=company, 
+                membership=caller_membership
+            )
+
         if not record:
-            return ApiResponse.error(message="Face enrollment tracking profile not found.", status=status.HTTP_404_NOT_FOUND)
+            return ApiResponse.error(
+                message="Face enrollment tracking profile not found.", 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         return ApiResponse.success(data=FaceEnrollmentDetailSerializer(record).data)
 
 

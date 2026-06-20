@@ -22,6 +22,19 @@ class CompanyFaceEnrollmentPolicyCreateSerializer(serializers.ModelSerializer):
         fields = ["policy_type", "is_active"]
 
 
+class CompanyFaceEnrollmentPolicyUpdateSerializer(serializers.ModelSerializer):
+    """
+    Handles granular partial modifications (PATCH) safely. 
+    Enforces that inputs are optional to prevent state clashing.
+    """
+    class Meta:
+        model = CompanyFaceEnrollmentPolicy
+        fields = ["policy_type", "is_active"]
+        extra_kwargs = {
+            "policy_type": {"required": False, "allow_null": False},
+            "is_active": {"required": False},
+        }
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Region: Face Enrollment Lifecycle Serializers
 # ─────────────────────────────────────────────────────────────────────────────

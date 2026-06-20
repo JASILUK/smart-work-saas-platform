@@ -12,6 +12,13 @@ class CompanyFaceEnrollmentPolicySelector:
         return CompanyFaceEnrollmentPolicy.objects.select_related("company")
 
     @classmethod
+    def get_company_policy(cls, company: Company) -> Optional[CompanyFaceEnrollmentPolicy]:
+        """
+        Fetches the active face enrollment configuration policy for a specific tenant company workspace.
+        """
+        return cls.get_queryset().filter(company=company).first()
+
+    @classmethod
     def get_active_policy(cls, company: Company) -> Optional[CompanyFaceEnrollmentPolicy]:
         """
         Fetches the active face enrollment configuration policy for a specific tenant company workspace.

@@ -3,13 +3,17 @@ from django.db.models import QuerySet
 from apps.companies.models import Company, Membership
 from apps.attendance.models.face_enrollment import FaceEnrollment, EnrollmentStatusChoices
 
-
 class FaceEnrollmentSelector:
     """
-    Provides optimized lookup methods for face enrollment records, using pre-fetches to prevent N+1 queries.
+    Provides optimized lookup methods for face enrollment records, using 
+    pre-fetches to prevent N+1 queries during serialization sweeps.
     """
+    
     @classmethod
     def get_queryset(cls) -> QuerySet[FaceEnrollment]:
+        """
+        Base optimized queryset capturing critical relational database joins up-front.
+        """
         return FaceEnrollment.objects.select_related(
             "company", 
             "membership__user", 
@@ -18,18 +22,35 @@ class FaceEnrollmentSelector:
         )
 
     @classmethod
-    def get_by_id(cls, enrollment_id: int, company: Company) -> Optional[FaceEnrollment]:
+    def get_by_id(
+        cls, *, enrollment_id: int, company: Company, membership: Optional[Membership] = None
+    ) -> Optional[FaceEnrollment]:
         """
         Resolves a single unique face template tracking configuration safely bounded by tenant scope.
+        Optionally handles employee self-service constraints to isolate row-level identity lookups.
         """
-        return cls.get_queryset().filter(id=enrollment_id, company=company).first()
+        queryset = cls.get_queryset().filter(id=enrollment_id, company=company)
+        
+        if membership is not None:
+            queryset = queryset.filter(membership=membership)
+            
+        return queryset.first()
 
     @classmethod
-    def list_company_enrollments(cls, company: Company) -> QuerySet[FaceEnrollment]:
+    def list_company_enrollments(
+        cls, *, company: Company, membership: Optional[Membership] = None
+    ) -> QuerySet[FaceEnrollment]:
         """
         Lists all registration profiles logged across a specific company workspace context.
+        Applies row-level ownership isolation if a membership context modifier parameter is supplied.
         """
-        return cls.get_queryset().filter(company=company)
+        queryset = cls.get_queryset().filter(company=company)
+        
+        if membership is not None:
+            queryset = queryset.filter(membership=membership)
+            
+        return queryset
+    
 
     @classmethod
     def list_membership_enrollments(cls, company: Company, membership: Membership) -> QuerySet[FaceEnrollment]:

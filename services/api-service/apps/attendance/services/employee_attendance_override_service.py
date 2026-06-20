@@ -1,8 +1,8 @@
 from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.companies.models import Company, Membership
 from apps.attendance.models.employee_attendance_override import EmployeeAttendanceOverride
 from apps.attendance.validators.attendance_access_validator import AttendanceAccessValidator
-
 
 class EmployeeAttendanceOverrideService:
     """
@@ -11,13 +11,18 @@ class EmployeeAttendanceOverrideService:
     @classmethod
     @transaction.atomic
     def create_override(cls, *, company: Company, membership: Membership, validated_data: dict) -> EmployeeAttendanceOverride:
+        # ✅ EXTRACT RELATIONSHIPS SAFELY TO AVOID DUPLICATES OR CRASHES
         method_ids = [m.id for m in validated_data.pop("allowed_methods", [])]
         location_ids = [l.id for l in validated_data.pop("allowed_locations", [])]
+        
+        # ✅ FIXED: Pop 'membership' out of the validated dictionary so it doesn't duplicate in model constructor unpacking
+        validated_data.pop("membership", None)
 
         if validated_data.get("is_active", True):
             AttendanceAccessValidator.validate_override_uniqueness(membership=membership)
         AttendanceAccessValidator.validate_method_and_locations(method_ids, location_ids, company)
 
+        # Runs smoothly now with zero dictionary signature conflicts
         override = EmployeeAttendanceOverride(company=company, membership=membership, **validated_data)
         override.save()
         override.allowed_methods.set(method_ids)
@@ -29,6 +34,9 @@ class EmployeeAttendanceOverrideService:
     def update_override(cls, *, instance: EmployeeAttendanceOverride, validated_data: dict) -> EmployeeAttendanceOverride:
         method_objs = validated_data.pop("allowed_methods", None)
         location_objs = validated_data.pop("allowed_locations", None)
+        
+        # ✅ FIXED: Pop 'membership' out here too if partial patches accidentally send it through
+        validated_data.pop("membership", None)
 
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
@@ -52,7 +60,4 @@ class EmployeeAttendanceOverrideService:
     @classmethod
     @transaction.atomic
     def remove_override(cls, *, instance: EmployeeAttendanceOverride) -> None:
-        """
-        Completely hard-deletes an override statement since overrides represent transient behavioral edge-cases.
-        """
         instance.delete()
