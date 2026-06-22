@@ -15,6 +15,7 @@ from apps.attendance.api.v1.views.company_work_schedule_api import (
 
 # Core Holiday CRUD & Listing Views
 from apps.attendance.api.v1.views.daily_attendance_views import DailyAttendanceDetailAPI, DailyAttendanceFinalizeAPI, DailyAttendanceListAPI, DailyAttendanceReprocessAPI, DailyAttendanceReviewsAPI
+from apps.attendance.api.v1.views.employee_dashboard_view import EmployeeDashboardAPIView
 from apps.attendance.api.v1.views.face_enrollment_views import CompanyFaceEnrollmentPolicyAPI, EmployeeSelfEnrollmentAPI, FaceEnrollmentApproveAPI, FaceEnrollmentDetailAPI, FaceEnrollmentListAPI, FaceEnrollmentRejectAPI, FaceEnrollmentRevokeAPI, HRInstructionEnrollmentAPI
 from apps.attendance.api.v1.views.holiday_views import (
     HolidayListCreateAPI,
@@ -311,4 +312,13 @@ urlpatterns = [
     path("daily/reprocess/", DailyAttendanceReprocessAPI.as_view(), name="daily-attendance-pipeline-reprocess"),
     path("daily/finalize/", DailyAttendanceFinalizeAPI.as_view(), name="daily-attendance-sheet-finalize"),
     path("daily/reviews/", DailyAttendanceReviewsAPI.as_view(), name="daily-attendance-exceptions-reviews"),
+
+
+    path(
+        "dashboard/",
+        EmployeeDashboardAPIView.as_view(),
+        name="attendance-dashboard",
+    ),
+
+
 ]

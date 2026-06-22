@@ -2,8 +2,7 @@ import datetime
 from typing import Any, Optional
 from django.db.models import QuerySet, Q
 from django.utils import timezone
-from apps.attendance.models import EmployeeShiftAssignment
-
+from apps.attendance.models.shift import EmployeeShiftAssignment
 
 class EmployeeShiftAssignmentSelector:
     """
@@ -129,7 +128,6 @@ class EmployeeShiftAssignmentSelector:
         if target_date is None:
             target_date = timezone.localdate()
 
-        # Filter assignments where: effective_from <= target_date AND (effective_until IS NULL OR effective_until >= target_date)
         queryset = EmployeeShiftAssignmentSelector.get_queryset().filter(
             membership=membership,
             is_active=True,
@@ -138,8 +136,28 @@ class EmployeeShiftAssignmentSelector:
             Q(effective_until__isnull=True) | Q(effective_until__gte=target_date)
         )
 
-        # Returns the newest matching assignment based on ordering properties
         return queryset.first()
+
+    @staticmethod
+    def get_active_assignment_for_date(*, membership: Any, date: datetime.date) -> Optional[EmployeeShiftAssignment]:
+        """
+        Synthesized entry point matching dashboard telemetry calculation models.
+        """
+        return EmployeeShiftAssignmentSelector.get_current_assignment(
+            membership=membership,
+            target_date=date
+        )
+
+    @staticmethod
+    def get_next_upcoming_assignment(*, membership: Any, from_date: datetime.date) -> Optional[EmployeeShiftAssignment]:
+        """
+        Resolves future planned shift changes to drive upcoming widget views on frontend grids.
+        """
+        return EmployeeShiftAssignmentSelector.get_queryset().filter(
+            membership=membership,
+            is_active=True,
+            effective_from__gt=from_date
+        ).order_by("effective_from").first()
 
     @staticmethod
     def get_active_assignments(*, company: Any) -> QuerySet[EmployeeShiftAssignment]:
@@ -172,7 +190,6 @@ class EmployeeShiftAssignmentSelector:
         Checks for any schedule conflicts where an existing timeline overlaps with a proposed range.
         Handles open-ended assignments (where effective_to is NULL) safely in memory and database execution.
         """
-        # Base filter tracking active rows for this specific individual contributor
         queryset = EmployeeShiftAssignment.objects.filter(
             membership=membership,
             is_active=True
@@ -181,14 +198,10 @@ class EmployeeShiftAssignmentSelector:
         if exclude_id is not None:
             queryset = queryset.exclude(id=exclude_id)
 
-        # 1. Evaluate conflicts against open-ended prospective allocations (new effective_to is NULL)
         if effective_until is None:
-            # Overlaps any record whose effective_until is greater than the new effective_from, OR is also open-ended
             overlap_condition = Q(effective_until__isnull=True) | Q(effective_until__gte=effective_from)
             return queryset.filter(overlap_condition).exists()
 
-        # 2. Evaluate conflicts against bounded prospective allocations (new effective_to is explicitly set)
-        # Condition formula: existing.effective_from <= new.effective_to AND (existing.effective_until >= new.effective_from OR existing.effective_until IS NULL)
         overlap_condition = Q(effective_from__lte=effective_until) & (
             Q(effective_until__gte=effective_from) | Q(effective_until__isnull=True)
         )

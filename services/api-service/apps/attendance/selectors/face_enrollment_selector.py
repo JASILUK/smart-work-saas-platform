@@ -1,5 +1,5 @@
 from typing import Optional
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Q
 from apps.companies.models import Company, Membership
 from apps.attendance.models.face_enrollment import FaceEnrollment, EnrollmentStatusChoices
 
@@ -51,7 +51,6 @@ class FaceEnrollmentSelector:
             
         return queryset
     
-
     @classmethod
     def list_membership_enrollments(cls, company: Company, membership: Membership) -> QuerySet[FaceEnrollment]:
         """
@@ -69,6 +68,20 @@ class FaceEnrollmentSelector:
             membership=membership,
             status=EnrollmentStatusChoices.APPROVED
         ).first()
+
+    @classmethod
+    def get_active_or_pending_enrollment(cls, company: Company, membership: Membership) -> Optional[FaceEnrollment]:
+        """
+        Synthesized entry point matching dashboard orchestration contracts securely.
+        Prioritizes an APPROVED profile, falling back to a PENDING record if available.
+        """
+        enrollments = cls.get_queryset().filter(
+            company=company,
+            membership=membership,
+            status__in=[EnrollmentStatusChoices.APPROVED, EnrollmentStatusChoices.PENDING]
+        )
+        # Prioritize APPROVED over PENDING
+        return sorted(enrollments, key=lambda x: x.status == EnrollmentStatusChoices.APPROVED, reverse=True)[0] if enrollments else None
 
     @classmethod
     def get_pending_enrollments(cls, company: Company) -> QuerySet[FaceEnrollment]:

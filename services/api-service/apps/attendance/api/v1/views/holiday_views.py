@@ -2,7 +2,7 @@ from apps.core.standers_pagination import StandardLimitOffsetPagination
 from rest_framework.request import Request
 from django.utils.timezone import localdate
 
-from apps.attendance.selectors import holiday_selector
+from apps.attendance.selectors.holiday_selector import HolidaySelector
 from apps.attendance.services.holiday_service import HolidayService
 from apps.attendance.services.holiday_import_service import HolidayImportService
 from apps.attendance.api.v1.serializers.holiday_serializers import (
@@ -28,7 +28,7 @@ class HolidayListCreateAPI(BaseCompanyAPIView):
 
     def get(self, request: Request):
         # 1. Fetch the base query from the selector
-        base_queryset = holiday_selector.get_company_holidays(company=request.company)
+        base_queryset = HolidaySelector.get_company_holidays(company=request.company)
 
         # 2. Apply query parameter filtering
         holiday_type = request.query_params.get("holiday_type")
@@ -46,7 +46,7 @@ class HolidayListCreateAPI(BaseCompanyAPIView):
             base_queryset = base_queryset.filter(holiday_date__gte=localdate())
 
         # 3. Call the selector to calculate the metrics before slicing for pagination
-        metrics = holiday_selector.get_holiday_metrics(base_queryset)
+        metrics = HolidaySelector.get_holiday_metrics(base_queryset)
 
         # 4. Paginate the dataset
         paginator = StandardLimitOffsetPagination()
@@ -83,7 +83,7 @@ class HolidayListCreateAPI(BaseCompanyAPIView):
         )
 
         # Refresh from database via selector to ensure clean detail structure representation
-        holiday = holiday_selector.get_company_holiday(
+        holiday = HolidaySelector.get_company_holiday(
             company=request.company, 
             holiday_id=holiday.id
         )
@@ -110,7 +110,7 @@ class HolidayDetailAPI(BaseCompanyAPIView):
     # =====================================================
 
     def get(self, request: Request, holiday_id: int):
-        holiday = holiday_selector.get_company_holiday(
+        holiday = HolidaySelector.get_company_holiday(
             company=request.company, 
             holiday_id=holiday_id
         )
@@ -129,7 +129,7 @@ class HolidayDetailAPI(BaseCompanyAPIView):
     # =====================================================
 
     def patch(self, request: Request, holiday_id: int):
-        holiday = holiday_selector.get_company_holiday(
+        holiday = HolidaySelector.get_company_holiday(
             company=request.company, 
             holiday_id=holiday_id
         )
@@ -154,7 +154,7 @@ class HolidayDetailAPI(BaseCompanyAPIView):
         )
 
         # Re-fetch from selector for output format validation matching architecture
-        holiday = holiday_selector.get_company_holiday(
+        holiday = HolidaySelector.get_company_holiday(
             company=request.company, 
             holiday_id=holiday.id
         )
@@ -170,7 +170,7 @@ class HolidayDetailAPI(BaseCompanyAPIView):
     # =====================================================
 
     def delete(self, request: Request, holiday_id: int):
-        holiday = holiday_selector.get_company_holiday(
+        holiday = HolidaySelector.get_company_holiday(
             company=request.company, 
             holiday_id=holiday_id
         )

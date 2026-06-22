@@ -11,7 +11,7 @@ from apps.attendance.integrations.holidays.factory import (
     HolidayProviderFactory,
 )
 from apps.attendance.models import Holiday
-from apps.attendance.selectors import holiday_selector
+from apps.attendance.selectors.holiday_selector import HolidaySelector
 
 
 class HolidayImportService:
@@ -97,7 +97,7 @@ class HolidayImportService:
             }
 
         existing_qs = (
-            holiday_selector
+            HolidaySelector
             .get_company_holidays(
                 company=company,
             )

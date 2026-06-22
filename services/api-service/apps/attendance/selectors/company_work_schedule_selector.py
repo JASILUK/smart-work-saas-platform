@@ -1,6 +1,4 @@
-from apps.attendance.models.company_work_schedule import (
-    CompanyWorkSchedule,
-)
+from apps.attendance.models.company_work_schedule import CompanyWorkSchedule
 
 
 class CompanyWorkScheduleSelector:
@@ -11,11 +9,8 @@ class CompanyWorkScheduleSelector:
 
     @staticmethod
     def get_queryset():
-
         return (
-
             CompanyWorkSchedule.objects
-
             .select_related(
                 "company",
                 "default_shift",
@@ -27,45 +22,37 @@ class CompanyWorkScheduleSelector:
     # =====================================================
 
     @staticmethod
-    def get_company_schedule(
-        *,
-        company,
-    ):
-
+    def get_company_schedule(*, company):
         return (
-
             CompanyWorkScheduleSelector
-
             .get_queryset()
-
             .filter(
                 company=company,
                 is_active=True,
             )
-
             .first()
         )
+
+    @staticmethod
+    def get_by_company(*, company):
+        """
+        Synthesized entry point matching dashboard orchestration contracts securely 
+        to pull the company-wide default schedule profile.
+        """
+        return CompanyWorkScheduleSelector.get_company_schedule(company=company)
 
     # =====================================================
     # GET BY ID
     # =====================================================
 
     @staticmethod
-    def get_by_id(
-        *,
-        schedule_id,
-    ):
-
+    def get_by_id(*, schedule_id):
         return (
-
             CompanyWorkScheduleSelector
-
             .get_queryset()
-
             .filter(
                 id=schedule_id,
             )
-
             .first()
         )
 
@@ -74,18 +61,11 @@ class CompanyWorkScheduleSelector:
     # =====================================================
 
     @staticmethod
-    def exists_for_company(
-        *,
-        company,
-    ):
-
+    def exists_for_company(*, company):
         return (
-
             CompanyWorkSchedule.objects
-
             .filter(
                 company=company,
             )
-
             .exists()
         )

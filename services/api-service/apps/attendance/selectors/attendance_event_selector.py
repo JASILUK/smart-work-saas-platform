@@ -1,9 +1,9 @@
 import datetime
 from typing import Optional
+from django.utils import timezone
 from django.db.models import QuerySet
 from apps.companies.models import Company, Membership
-from apps.attendance.models.attendance_event import AttendanceEvent, AttendanceEventTypes
-
+from apps.attendance.models.attendance_event import AttendanceEvent
 
 class AttendanceEventSelector:
     """
@@ -29,8 +29,20 @@ class AttendanceEventSelector:
 
     @classmethod
     def get_today_events(cls, *, company: Company, membership: Membership) -> QuerySet[AttendanceEvent]:
-        today_utc = timezone.now().date()
-        return cls.get_queryset().filter(company=company, membership=membership, event_time__date=today_utc).order_by("event_time")
+        today_local = timezone.localtime(timezone.now()).date()
+        return cls.get_queryset().filter(company=company, membership=membership, event_time__date=today_local).order_by("event_time")
+
+    @classmethod
+    def get_events_for_membership_and_date(cls, *, membership: Membership, date: datetime.date) -> QuerySet[AttendanceEvent]:
+        """
+        Synthesized entry point matching dashboard orchestration contracts securely 
+        to extract punch timeline strings without local timezone offset errors.
+        """
+        return cls.get_queryset().filter(
+            company=membership.company, 
+            membership=membership, 
+            event_time__date=date
+        ).order_by("event_time")
 
     @classmethod
     def get_membership_events(cls, *, company: Company, membership: Membership, start_date: datetime.date, end_date: datetime.date) -> QuerySet[AttendanceEvent]:

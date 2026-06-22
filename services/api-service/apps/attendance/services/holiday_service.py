@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from apps.attendance.models import Holiday
-from apps.attendance.selectors import holiday_selector
+from apps.attendance.selectors.holiday_selector import  HolidaySelector
 
 
 class HolidayService:
@@ -29,7 +29,7 @@ class HolidayService:
         name = validated_data["name"]
         holiday_date = validated_data["holiday_date"]
 
-        if holiday_selector.holiday_exists(company=company, holiday_date=holiday_date, name=name):
+        if HolidaySelector.holiday_exists(company=company, holiday_date=holiday_date, name=name):
             raise ValidationError("This holiday already exists.")
 
         with transaction.atomic():
@@ -129,7 +129,7 @@ class HolidayService:
         name = holiday_data["name"]
         holiday_date = holiday_data["holiday_date"]
 
-        existing_holidays = holiday_selector.get_holiday_by_date(company=company, holiday_date=holiday_date)
+        existing_holidays = HolidaySelector.get_holiday_by_date(company=company, holiday_date=holiday_date)
         matching_holiday = existing_holidays.filter(name__iexact=name).first()
 
         if matching_holiday:
@@ -168,7 +168,7 @@ class HolidayService:
             return {"imported": imported_count, "skipped": skipped_count}
 
         # Step 1: Query existing holidays once to pre-populate our memory map cache
-        existing_holidays_qs = holiday_selector.get_company_holidays(company=company).values_list(
+        existing_holidays_qs = HolidaySelector.get_company_holidays(company=company).values_list(
             "holiday_date", "name"
         )
         
