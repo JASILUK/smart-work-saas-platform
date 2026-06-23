@@ -55,7 +55,7 @@ class FaceEnrollment(TimeStampedModel):
         verbose_name=_("Model Architecture Ingestion Version Name")
     )
     similarity_threshold = models.FloatField(
-        default=0.85,
+        default=0.93,  # ✅ UPDATED: Raised from 0.85 to strict production level
         verbose_name=_("Minimum Cosine Passing Vector Confidence Limit")
     )
     liveness_verified = models.BooleanField(

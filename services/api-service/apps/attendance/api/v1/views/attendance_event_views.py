@@ -20,69 +20,94 @@ from apps.attendance.api.v1.serializers.attendance_event_serializers import (
 
 
 class AttendanceCheckInAPI(BaseCompanyAPIView):
-    required_permissions = {"POST": "tenant.attendance.use"}
-
+    required_permissions = {"POST": "tenant.attendance.view"}
+    
     def post(self, request: Request) -> Response:
         serializer = GenericPunchIngestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
         try:
             event = CheckInService.check_in(
-                company=request.company, membership=request.membership,
+                company=request.company,
+                membership=request.membership,
                 method=serializer.validated_data["attendance_method"],
-                evidence=serializer.validated_data, actor=request.membership
+                evidence=serializer.validated_data,
+                actor=request.membership
             )
-            return ApiResponse.success(data=AttendanceEventDetailSerializer(event).data, message="Check-in registered successfully.", status=status.HTTP_201_CREATED)
-        except DjangoValidationError as exc:
-            return ApiResponse.error(message=exc.message)
-
-
-class AttendanceBreakOutAPI(BaseCompanyAPIView):
-    required_permissions = {"POST": "tenant.attendance.use"}
-
-    def post(self, request: Request) -> Response:
-        serializer = GenericPunchIngestionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            event = BreakService.break_out(
-                company=request.company, membership=request.membership,
-                method=serializer.validated_data["attendance_method"],
-                evidence=serializer.validated_data, actor=request.membership
+            return ApiResponse.success(
+                data=AttendanceEventDetailSerializer(event).data,
+                message="Check-in registered successfully.",
+                status=status.HTTP_201_CREATED
             )
-            return ApiResponse.success(data=AttendanceEventDetailSerializer(event).data, message="Break interval initialized.")
-        except DjangoValidationError as exc:
-            return ApiResponse.error(message=exc.message)
-
-
-class AttendanceBreakInAPI(BaseCompanyAPIView):
-    required_permissions = {"POST": "tenant.attendance.use"}
-
-    def post(self, request: Request) -> Response:
-        serializer = GenericPunchIngestionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            event = BreakService.break_in(
-                company=request.company, membership=request.membership,
-                method=serializer.validated_data["attendance_method"],
-                evidence=serializer.validated_data, actor=request.membership
-            )
-            return ApiResponse.success(data=AttendanceEventDetailSerializer(event).data, message="Returned from break interval.")
         except DjangoValidationError as exc:
             return ApiResponse.error(message=exc.message)
 
 
 class AttendanceCheckOutAPI(BaseCompanyAPIView):
-    required_permissions = {"POST": "tenant.attendance.use"}
-
+    required_permissions = {"POST": "tenant.attendance.view"}
+    
     def post(self, request: Request) -> Response:
         serializer = GenericPunchIngestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
         try:
             event = CheckOutService.check_out(
-                company=request.company, membership=request.membership,
+                company=request.company,
+                membership=request.membership,
                 method=serializer.validated_data["attendance_method"],
-                evidence=serializer.validated_data, actor=request.membership
+                evidence=serializer.validated_data,
+                actor=request.membership
             )
-            return ApiResponse.success(data=AttendanceEventDetailSerializer(event).data, message="Check-out registered successfully.")
+            return ApiResponse.success(
+                data=AttendanceEventDetailSerializer(event).data,
+                message="Check-out registered successfully."
+            )
+        except DjangoValidationError as exc:
+            return ApiResponse.error(message=exc.message)
+
+
+class AttendanceBreakOutAPI(BaseCompanyAPIView):
+    required_permissions = {"POST": "tenant.attendance.view"}
+    
+    def post(self, request: Request) -> Response:
+        serializer = GenericPunchIngestionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            event = BreakService.break_out(
+                company=request.company,
+                membership=request.membership,
+                method=serializer.validated_data["attendance_method"],
+                evidence=serializer.validated_data,
+                actor=request.membership
+            )
+            return ApiResponse.success(
+                data=AttendanceEventDetailSerializer(event).data,
+                message="Break interval initialized."
+            )
+        except DjangoValidationError as exc:
+            return ApiResponse.error(message=exc.message)
+
+
+class AttendanceBreakInAPI(BaseCompanyAPIView):
+    required_permissions = {"POST": "tenant.attendance.view"}
+    
+    def post(self, request: Request) -> Response:
+        serializer = GenericPunchIngestionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            event = BreakService.break_in(
+                company=request.company,
+                membership=request.membership,
+                method=serializer.validated_data["attendance_method"],
+                evidence=serializer.validated_data,
+                actor=request.membership
+            )
+            return ApiResponse.success(
+                data=AttendanceEventDetailSerializer(event).data,
+                message="Returned from break interval."
+            )
         except DjangoValidationError as exc:
             return ApiResponse.error(message=exc.message)
 

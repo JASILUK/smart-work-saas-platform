@@ -16,14 +16,18 @@ class TodayStatusSerializer(serializers.Serializer):
     check_in = serializers.CharField(read_only=True, allow_blank=True)
     check_out = serializers.CharField(read_only=True, allow_blank=True)
     working_minutes = serializers.IntegerField(read_only=True)
+    is_late = serializers.BooleanField(read_only=True, default=False)  # Add this
     shift = ShiftDetailsSerializer(read_only=True, allow_null=True)
 
 
+# ✅ FIXED: Added validation_mode and face_required fields to match your dynamic engines output
 class AttendanceAccessSerializer(serializers.Serializer):
     auto_synced = serializers.BooleanField(read_only=True)
     primary_method = serializers.CharField(read_only=True, allow_null=True)
     available_methods = serializers.ListField(child=serializers.CharField(), read_only=True)
+    validation_mode = serializers.CharField(read_only=True)
     gps_required = serializers.BooleanField(read_only=True)
+    face_required = serializers.BooleanField(read_only=True)
     face_enrollment_status = serializers.CharField(read_only=True)
 
 

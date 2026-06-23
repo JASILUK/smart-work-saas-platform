@@ -69,13 +69,15 @@ TENANT_ROLE_BLUEPRINTS = {
             "Basic operational access."
         ),
         "patterns": [
-
             "tenant.company.view",
-
             "tenant.project.view",
-
+            
+            # Meetings
             "tenant.meeting.view",
             "tenant.meeting.join",
+            
+            # ✅ FIXED: Enforce clearance permissions for regular employees to clock in/out
+            "tenant.attendance.view",
         ],
     },
 }

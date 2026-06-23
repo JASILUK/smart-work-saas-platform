@@ -1,4 +1,5 @@
 import datetime
+import pytz
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
@@ -13,12 +14,41 @@ from apps.attendance.services.live_attendance_service import LiveAttendanceServi
 
 User = get_user_model()
 
+
 class EmployeeDashboardService:
+
+    @staticmethod
+    def _get_company_tz(company):
+        """Get company timezone: WorkSchedule first, then Company fallback."""
+        ws = CompanyWorkScheduleSelector.get_by_company(company=company)
+        if ws and getattr(ws, 'timezone', None):
+            return pytz.timezone(ws.timezone)
+        if getattr(company, 'timezone', None):
+            return pytz.timezone(company.timezone)
+        return pytz.UTC
+
+    @staticmethod
+    def _to_local_time(dt, tz):
+        """Convert UTC datetime to target timezone, return 12-hour time string with AM/PM."""
+        if not dt:
+            return ""
+        local_dt = dt.astimezone(tz) if dt.tzinfo else tz.localize(dt)
+        return local_dt.strftime("%I:%M %p")  # 03:36 PM
+
+    @staticmethod
+    def _combine_date_time(date_obj, time_obj, tz):
+        """Combine date + time into timezone-aware datetime."""
+        from datetime import datetime
+        naive = datetime.combine(date_obj, time_obj)
+        return tz.localize(naive)
 
     @staticmethod
     def get_dashboard(company, membership, today=None):
         if today is None:
             today = timezone.localtime(timezone.now()).date()
+
+        # Get company timezone
+        company_tz = EmployeeDashboardService._get_company_tz(company)
 
         # 1. Employee Context Definition
         employee_data = {
@@ -31,6 +61,10 @@ class EmployeeDashboardService:
             membership=membership,
             date=today
         )
+        
+        shift_data = None
+        shift_obj = None
+        
         if current_shift and getattr(current_shift, 'shift', None):
             shift_obj = current_shift.shift
             shift_data = {
@@ -47,8 +81,6 @@ class EmployeeDashboardService:
                     "start": shift_obj.start_time.strftime("%H:%M:%S") if shift_obj.start_time else "",
                     "end": shift_obj.end_time.strftime("%H:%M:%S") if shift_obj.end_time else "",
                 }
-            else:
-                shift_data = None
 
         # 3. Present Activity State Aggregation
         live_status = LiveAttendanceService.get_member_status_for_date(
@@ -56,38 +88,60 @@ class EmployeeDashboardService:
             date=today
         )
         
-        daily_record = DailyAttendanceSelector.get_record_by_employee_and_date(
-            membership=membership,
-            date=today
-        )
-        
         working_minutes = 0
         check_in_time = ""
         check_out_time = ""
-        
-        if daily_record:
-            working_minutes = getattr(daily_record, 'total_work_minutes', 0) or 0
-        
+        is_late = False
+
         events = AttendanceEventSelector.get_events_for_membership_and_date(
             membership=membership,
             date=today
         )
+        
         if events:
-            check_ins = [e for emp in [events] for e in (emp if isinstance(emp, list) else [emp]) if getattr(e, 'event_type', None) == 'CHECK_IN']
-            check_outs = [e for emp in [events] for e in (emp if isinstance(emp, list) else [emp]) if getattr(e, 'event_type', None) == 'CHECK_OUT']
+            check_ins = [e for e in events if e.event_type == 'CHECK_IN']
+            check_outs = [e for e in events if e.event_type == 'CHECK_OUT']
+            breaks_out = [e for e in events if e.event_type == 'BREAK_OUT']
+            breaks_in = [e for e in events if e.event_type == 'BREAK_IN']
             
             if check_ins:
-                sorted_ins = sorted(check_ins, key=lambda x: x.event_time)
-                check_in_time = timezone.localtime(sorted_ins[0].event_time).strftime("%H:%M:%S")
+                first_check_in = min(check_ins, key=lambda x: x.event_time)
+                check_in_time = EmployeeDashboardService._to_local_time(first_check_in.event_time, company_tz)
+                
+                # Check if late (compare with shift start)
+                if shift_obj and shift_obj.start_time:
+                    shift_start_dt = EmployeeDashboardService._combine_date_time(today, shift_obj.start_time, company_tz)
+                    check_in_dt = first_check_in.event_time.astimezone(company_tz)
+                    if check_in_dt > shift_start_dt:
+                        is_late = True
+            
             if check_outs:
-                sorted_outs = sorted(check_outs, key=lambda x: x.event_time)
-                check_out_time = timezone.localtime(sorted_outs[-1].event_time).strftime("%H:%M:%S")
+                last_check_out = max(check_outs, key=lambda x: x.event_time)
+                check_out_time = EmployeeDashboardService._to_local_time(last_check_out.event_time, company_tz)
+            
+            # Calculate working minutes
+            if check_ins:
+                first_in = min(check_ins, key=lambda x: x.event_time).event_time
+                last_out = max(check_outs, key=lambda x: x.event_time).event_time if check_outs else timezone.now()
+                
+                total_seconds = (last_out - first_in).total_seconds()
+                
+                break_seconds = 0
+                for bo in breaks_out:
+                    matching_bi = next((bi for bi in breaks_in if bi.event_time > bo.event_time), None)
+                    if matching_bi:
+                        break_seconds += (matching_bi.event_time - bo.event_time).total_seconds()
+                    elif not check_outs:
+                        break_seconds += (timezone.now() - bo.event_time).total_seconds()
+                
+                working_minutes = max(0, int((total_seconds - break_seconds) / 60))
 
         today_data = {
             "status": live_status or "NOT_CHECKED_IN",
             "check_in": check_in_time,
             "check_out": check_out_time,
             "working_minutes": working_minutes,
+            "is_late": is_late,
             "shift": shift_data,
         }
 
@@ -106,7 +160,6 @@ class EmployeeDashboardService:
         if face_enrollment:
             face_status = getattr(face_enrollment, 'status', 'NO_ENROLLMENT')
 
-        # ✅ FIXED: Treat access_payload explicitly as a dictionary payload
         allowed_methods = access_payload.get("methods", []) if access_payload else []
         validation_mode = access_payload.get("validation_mode", "ANY") if access_payload else "ANY"
         
@@ -115,18 +168,14 @@ class EmployeeDashboardService:
         is_biometric_hardware_only = "BIOMETRIC" in allowed_methods and len(allowed_methods) == 1
 
         if not is_biometric_hardware_only:
-            # Under STRICT_ALL / ALL, every listed validation channel must satisfy requirements
             if validation_mode == "ALL":
                 gps_required = "GPS" in allowed_methods
                 face_required = "FACE" in allowed_methods
             else:
-                # Under ANY mode, if there's only one method available, it becomes mandatory by default
                 if len(allowed_methods) == 1:
                     gps_required = "GPS" in allowed_methods
                     face_required = "FACE" in allowed_methods
                 else:
-                    # If multiple methods are available in ANY mode, the user can choose. 
-                    # We set flags to inform the frontend it has choices, but don't strictly lock either down as an absolute gate.
                     gps_required = False
                     face_required = False
 
@@ -144,8 +193,8 @@ class EmployeeDashboardService:
         status = today_data["status"]
         actions_data = {
             "can_check_in": status == "NOT_CHECKED_IN",
-            "can_check_out": status in ["CHECKED_IN", "ON_BREAK"],
-            "can_start_break": status == "CHECKED_IN",
+            "can_check_out": status in ["PRESENT", "ON_BREAK"],
+            "can_start_break": status == "PRESENT",
             "can_resume_break": status == "ON_BREAK",
         }
 
@@ -168,10 +217,10 @@ class EmployeeDashboardService:
         overtime_minutes = 0
 
         for record in monthly_records:
-            rec_status = getattr(record, 'status', '')
+            rec_status = getattr(record, 'attendance_status', '') or getattr(record, 'status', '')
             if rec_status == 'PRESENT' or getattr(record, 'total_work_minutes', 0) > 0:
                 present_days += 1
-            if getattr(record, 'is_late', False):
+            if getattr(record, 'is_late', False) or (rec_status == 'PRESENT' and getattr(record, 'late_minutes', 0) > 0):
                 late_days += 1
             if rec_status == 'ABSENT':
                 absent_days += 1

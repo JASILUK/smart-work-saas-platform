@@ -12,7 +12,7 @@ class LiveAttendanceService:
     @classmethod
     def get_member_status(cls, *, company: Company, membership: Membership) -> str:
         """
-        Returns: ABSENT, PRESENT, ON_BREAK, CHECKED_OUT.
+        Returns: NOT_CHECKED_IN, PRESENT, ON_BREAK, CHECKED_OUT.
         Default evaluation defaults to current local server date configurations.
         """
         today_local = timezone.localtime(timezone.now()).date()
@@ -24,9 +24,9 @@ class LiveAttendanceService:
         Synthesized entry point matching dashboard telemetry aggregation contracts securely.
         Accepts explicit date parameters to evaluate historical status without timezone offset drift.
         Maps internal system event types to exact dashboard orchestration status states:
-        - CHECK_IN -> CHECKED_IN
+        - CHECK_IN -> PRESENT
         - BREAK_OUT -> ON_BREAK
-        - BREAK_IN -> CHECKED_IN
+        - BREAK_IN -> PRESENT
         - CHECK_OUT -> CHECKED_OUT
         - No Events -> NOT_CHECKED_IN
         """
@@ -46,7 +46,7 @@ class LiveAttendanceService:
         if event_type == 'BREAK_OUT':
             return "ON_BREAK"
         if event_type in ['CHECK_IN', 'BREAK_IN']:
-            return "CHECKED_IN"
+            return "PRESENT"  # ✅ FIXED: Changed from "CHECKED_IN" to "PRESENT" to align with state machine rules
             
         return "NOT_CHECKED_IN"
 
@@ -58,12 +58,17 @@ class LiveAttendanceService:
         
         for member in active_staff:
             status_str = cls.get_member_status(company=company, membership=member)
-            # Support conversion matching payload structures
+            
+            # ✅ FIXED: Cleanly maps the corrected status strings directly down into analytics dictionary keys
             key = status_str.lower()
-            if key == "checked_in":
-                key = "present"
-            elif key == "not_checked_in":
+            if key == "not_checked_in":
                 key = "absent"
+            elif key == "present":
+                key = "present"
+            elif key == "on_break":
+                key = "on_break"
+            elif key == "checked_out":
+                key = "checked_out"
                 
             if key in summary:
                 summary[key] += 1

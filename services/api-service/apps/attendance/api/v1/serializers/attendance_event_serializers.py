@@ -27,14 +27,81 @@ class AttendanceEventDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class GenericPunchIngestionSerializer(serializers.Serializer):
-    attendance_method = serializers.CharField(required=True)
-    latitude = serializers.FloatField(required=False, default=None)
-    longitude = serializers.FloatField(required=False, default=None)
-    face_verified = serializers.BooleanField(required=False, default=False)
-    confidence = serializers.FloatField(required=False, default=1.0)
-    biometric_log_id = serializers.IntegerField(required=False, default=None)
 
+
+
+class GenericPunchIngestionSerializer(serializers.Serializer):
+    """
+    Secure serializer for all punch actions:
+    check-in, check-out, break-out, break-in.
+    
+    Uses verification tokens instead of raw booleans.
+    """
+    attendance_method = serializers.CharField(required=True)
+    
+    # GPS verification token (from /verify/gps/)
+    gps_verification_token = serializers.CharField(
+        required=False, 
+        allow_blank=True,
+        help_text="Token from GPS verification API"
+    )
+    
+    # Face verification token (from /verify/face/)
+    face_verification_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Token from Face verification API"
+    )
+    
+    # Biometric evidence
+    biometric_log_id = serializers.IntegerField(
+        required=False,
+        default=None,
+        help_text="Required for BIOMETRIC method"
+    )
+    
+    # Manual attendance
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Required for MANUAL method"
+    )
+    
+    # ─── DEPRECATED: Removed insecure fields ───
+    # latitude = serializers.FloatField(...)  # REMOVED
+    # longitude = serializers.FloatField(...)  # REMOVED
+    # face_verified = serializers.BooleanField(...)  # REMOVED - NEVER trust frontend
+    # confidence = serializers.FloatField(...)  # REMOVED
+    
+    def validate(self, data):
+        method = data.get("attendance_method")
+        
+        # Validate method-specific required tokens
+        if method in ["GPS_ONLY", "GPS_FACE"]:
+            if not data.get("gps_verification_token"):
+                raise serializers.ValidationError(
+                    {"gps_verification_token": "GPS verification token is required."}
+                )
+        
+        if method in ["FACE_ONLY", "GPS_FACE"]:
+            if not data.get("face_verification_token"):
+                raise serializers.ValidationError(
+                    {"face_verification_token": "Face verification token is required."}
+                )
+        
+        if method == "BIOMETRIC":
+            if not data.get("biometric_log_id"):
+                raise serializers.ValidationError(
+                    {"biometric_log_id": "Biometric log ID is required."}
+                )
+        
+        if method == "MANUAL":
+            if not data.get("reason"):
+                raise serializers.ValidationError(
+                    {"reason": "Reason is required for manual attendance."}
+                )
+        
+        return data
 
 class ManualAttendanceAdjustmentSerializer(serializers.Serializer):
     membership = serializers.PrimaryKeyRelatedField(queryset=Membership.objects.all(), required=True)
