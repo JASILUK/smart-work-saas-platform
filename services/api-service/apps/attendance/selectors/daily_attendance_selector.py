@@ -91,6 +91,41 @@ class DailyAttendanceSelector:
             attendance_date__range=[start_date, end_date],
         ).order_by("attendance_date")
 
+    # ------------------------------------------------------------------
+    # ALIAS: get_records_for_date_range
+    # Accepts BOTH naming conventions to support all callers:
+    #   - AttendanceHistoryService uses: date_from, date_to
+    #   - EmployeeDashboardService uses: start_date, end_date
+    # ------------------------------------------------------------------
+    @classmethod
+    def get_records_for_date_range(
+        cls,
+        *,
+        membership: Membership,
+        date_from: Optional[datetime.date] = None,
+        date_to: Optional[datetime.date] = None,
+        start_date: Optional[datetime.date] = None,
+        end_date: Optional[datetime.date] = None,
+    ) -> QuerySet[DailyAttendance]:
+        """
+        Flexible date range query supporting both naming conventions.
+        Priority: start_date/end_date > date_from/date_to
+        """
+        _start = start_date or date_from
+        _end = end_date or date_to
+
+        if not _start or not _end:
+            raise ValueError(
+                "get_records_for_date_range requires either (start_date, end_date) "
+                "or (date_from, date_to)"
+            )
+
+        return cls.get_date_range_records(
+            membership=membership,
+            start_date=_start,
+            end_date=_end,
+        )
+
     @classmethod
     def get_status_records(
         cls,
@@ -255,3 +290,56 @@ class DailyAttendanceSelector:
             }
             for record in records
         ]
+
+    @classmethod
+    def get_weekly_records(
+        cls,
+        *,
+        membership: Membership,
+        year: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Returns weekly attendance aggregates for the given year.
+        Each week contains: week_start, week_end, present_days, total_days, percentage.
+        """
+        records = cls.get_queryset().filter(
+            membership=membership,
+            attendance_date__year=year,
+        ).order_by("attendance_date")
+
+        weekly_data: Dict[int, Dict[str, Any]] = {}
+        for record in records:
+            date = record.attendance_date
+            iso_year, iso_week, _ = date.isocalendar()
+            if iso_year != year:
+                continue
+
+            if iso_week not in weekly_data:
+                monday = date - datetime.timedelta(days=date.weekday())
+                sunday = monday + datetime.timedelta(days=6)
+                weekly_data[iso_week] = {
+                    "week_start": monday,
+                    "week_end": sunday,
+                    "present_days": 0,
+                    "total_days": 0,
+                }
+
+            weekly_data[iso_week]["total_days"] += 1
+            if record.attendance_status == "PRESENT":
+                weekly_data[iso_week]["present_days"] += 1
+
+        result = []
+        for week_num in sorted(weekly_data.keys()):
+            week = weekly_data[week_num]
+            total = week["total_days"]
+            present = week["present_days"]
+            percentage = round((present / total * 100), 2) if total > 0 else 0.0
+            result.append({
+                "week_start": week["week_start"].strftime("%Y-%m-%d"),
+                "week_end": week["week_end"].strftime("%Y-%m-%d"),
+                "present_days": present,
+                "total_days": total,
+                "percentage": percentage,
+            })
+
+        return result

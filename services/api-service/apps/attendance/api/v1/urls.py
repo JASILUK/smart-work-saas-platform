@@ -26,7 +26,7 @@ from apps.attendance.api.v1.views.holiday_views import (
 
 # ─── Integrated Employee History Module (✅ FIXED: Using the exact classes from your v1 files)
 from apps.attendance.api.v1.views.my_attendance_views import (
-    MyAttendanceRecordsAPI, MyAttendanceSummaryAPI, MyAttendanceCalendarAPI, MyAttendanceDetailAPI
+    MyAttendanceRecordsAPI, MyAttendanceSummaryAPI, MyAttendanceCalendarAPI, MyAttendanceDetailAPI, MyAttendanceTrendsView
 )
 from apps.attendance.api.v1.views.attendance_management_views import (
     AttendanceManagementListAPI, AttendanceManagementDetailAPI, AttendanceManagementAnalyticsAPI
@@ -163,7 +163,10 @@ urlpatterns = [
     path("my-attendance/", MyAttendanceRecordsAPI.as_view(), name="my-attendance-list"),
     path("my-attendance/summary/", MyAttendanceSummaryAPI.as_view(), name="my-attendance-summary"),
     path("my-attendance/calendar/", MyAttendanceCalendarAPI.as_view(), name="my-attendance-calendar"),
+    path("my-attendance/trends/", MyAttendanceTrendsView.as_view(), name="my-attendance-trends"),
     path("my-attendance/<int:pk>/", MyAttendanceDetailAPI.as_view(), name="my-attendance-detail"),
+
+
 
     # ─── Attendance Management Module (✅ FIXED: Class names matched to your imports and parameters set to pk)
     path("attendance-management/", AttendanceManagementListAPI.as_view(), name="attendance-management-list"),
