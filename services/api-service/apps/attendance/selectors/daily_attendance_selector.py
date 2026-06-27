@@ -265,13 +265,7 @@ class DailyAttendanceSelector:
         }
 
     @classmethod
-    def get_attendance_calendar_data(
-        cls,
-        *,
-        membership: Membership,
-        year: int,
-        month: int,
-    ) -> List[Dict[str, Any]]:
+    def get_attendance_calendar_data(cls, *, membership, year, month):
         records = cls.get_queryset().filter(
             membership=membership,
             attendance_date__year=year,
@@ -287,6 +281,9 @@ class DailyAttendanceSelector:
                 "is_leave": record.is_leave,
                 "is_holiday": record.is_holiday,
                 "is_weekend": record.is_weekend,
+                "check_in": record.first_check_in_at.strftime("%H:%M") if record.first_check_in_at else None,
+                "check_out": record.last_check_out_at.strftime("%H:%M") if record.last_check_out_at else None,
+                "work_hours": round(record.total_work_minutes / 60, 2) if record.total_work_minutes else None,
             }
             for record in records
         ]
