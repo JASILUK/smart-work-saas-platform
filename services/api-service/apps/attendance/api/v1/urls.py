@@ -58,6 +58,28 @@ from apps.attendance.api.v1.views.attendance_policy_views import (
 )
 from apps.attendance.api.v1.views.verification_views import FaceVerifyAPIView, GPSVerifyAPIView
 
+
+from apps.attendance.api.v1.views.leave_views import (
+    MyLeaveBalancesAPI,
+    MyLeaveRequestsAPI,
+    MyLeaveRequestDetailAPI,
+    MyLeaveRequestCancelAPI,
+    LeaveRequestListAPI,
+    LeaveRequestDetailAPI,
+    LeaveRequestApproveAPI,
+    LeaveRequestRejectAPI,
+    LeaveRequestCancelHRAPI,
+    EmployeeLeaveBalancesAPI,
+    EmployeeLeaveRequestsAPI,
+    LeaveTypeListCreateAPI,
+    LeaveTypeDetailUpdateDeleteAPI,
+    LeaveBalanceListAPI,
+    LeaveBalanceAdjustAPI,
+    LeaveBalanceAllocateAPI,
+)
+
+
+
 app_name = "attendance"
 
 urlpatterns = [
@@ -172,4 +194,39 @@ urlpatterns = [
     path("attendance-management/", AttendanceManagementListAPI.as_view(), name="attendance-management-list"),
     path("attendance-management/analytics/", AttendanceManagementAnalyticsAPI.as_view(), name="attendance-management-analytics"),
     path("attendance-management/<int:pk>/", AttendanceManagementDetailAPI.as_view(), name="attendance-management-detail"),
+
+
+
+    path("me/leave-balances/", MyLeaveBalancesAPI.as_view(), name="my-leave-balances"),
+    path("me/leave-requests/", MyLeaveRequestsAPI.as_view(), name="my-leave-requests"),
+    path("me/leave-requests/<int:request_id>/", MyLeaveRequestDetailAPI.as_view(), name="my-leave-request-detail"),
+    path("me/leave-requests/<int:request_id>/cancel/", MyLeaveRequestCancelAPI.as_view(), name="my-leave-request-cancel"),
+
+    # =====================================================
+    # HR LEAVE REQUEST MANAGEMENT
+    # =====================================================
+    path("leave-requests/", LeaveRequestListAPI.as_view(), name="leave-request-list"),
+    path("leave-requests/<int:request_id>/", LeaveRequestDetailAPI.as_view(), name="leave-request-detail"),
+    path("leave-requests/<int:request_id>/approve/", LeaveRequestApproveAPI.as_view(), name="leave-request-approve"),
+    path("leave-requests/<int:request_id>/reject/", LeaveRequestRejectAPI.as_view(), name="leave-request-reject"),
+    path("leave-requests/<int:request_id>/cancel/", LeaveRequestCancelHRAPI.as_view(), name="leave-request-hr-cancel"),
+
+    # =====================================================
+    # EMPLOYEE PROFILE APIs (HR VIEW)
+    # =====================================================
+    path("employees/<int:membership_id>/leave-balances/", EmployeeLeaveBalancesAPI.as_view(), name="employee-leave-balances"),
+    path("employees/<int:membership_id>/leave-requests/", EmployeeLeaveRequestsAPI.as_view(), name="employee-leave-requests"),
+
+    # =====================================================
+    # LEAVE TYPE CONFIGURATION
+    # =====================================================
+    path("leave-types/", LeaveTypeListCreateAPI.as_view(), name="leave-type-list"),
+    path("leave-types/<int:leave_type_id>/", LeaveTypeDetailUpdateDeleteAPI.as_view(), name="leave-type-detail"),
+
+    # =====================================================
+    # LEAVE BALANCE ADMINISTRATION
+    # =====================================================
+    path("leave-balances/", LeaveBalanceListAPI.as_view(), name="leave-balance-list"),
+    path("leave-balances/<int:balance_id>/adjust/", LeaveBalanceAdjustAPI.as_view(), name="leave-balance-adjust"),
+    path("leave-balances/allocate/", LeaveBalanceAllocateAPI.as_view(), name="leave-balance-allocate"),
 ]
