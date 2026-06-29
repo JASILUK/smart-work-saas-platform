@@ -7,68 +7,42 @@
 from rest_framework import serializers
 from apps.attendance.models.leave import LeaveType, LeaveBalance, LeaveRequest
 
-
 class LeaveTypeListSerializer(serializers.ModelSerializer):
     """
-    List serializer for LeaveType.
+    Optimized summary list serializer for corporate policy listings.
     """
-
     class Meta:
         model = LeaveType
         fields = [
-            "id",
-            "name",
-            "code",
-            "description",
-            "annual_quota",
-            "is_paid",
-            "requires_approval",
-            "allow_half_day",
-            "requires_attachment",
-            "is_active",
-            "created_at",
+            "id", "name", "code", "description", "annual_quota",
+            "is_paid", "requires_approval", "allow_half_day", 
+            "requires_attachment", "is_active", "created_at"
         ]
 
 
 class LeaveTypeDetailSerializer(serializers.ModelSerializer):
     """
-    Detail serializer for LeaveType.
+    Comprehensive serializer for single resource extraction lookups.
     """
-
     class Meta:
         model = LeaveType
         fields = [
-            "id",
-            "name",
-            "code",
-            "description",
-            "annual_quota",
-            "is_paid",
-            "requires_approval",
-            "allow_half_day",
-            "requires_attachment",
-            "is_active",
-            "created_at",
-            "updated_at",
+            "id", "name", "code", "description", "annual_quota",
+            "is_paid", "requires_approval", "allow_half_day", 
+            "requires_attachment", "is_active", "created_at", "updated_at"
         ]
 
 
 class LeaveTypeCreateUpdateSerializer(serializers.ModelSerializer):
     """
-    Create/Update serializer for LeaveType.
+    Write-enabled validation contract mapping incoming payload vectors safely.
     """
-
     class Meta:
         model = LeaveType
         fields = [
-            "name",
-            "code",
-            "description",
-            "annual_quota",
-            "is_paid",
-            "requires_approval",
-            "allow_half_day",
-            "requires_attachment",
+            "name", "code", "description", "annual_quota",
+            "is_paid", "requires_approval", "allow_half_day", 
+            "requires_attachment", "is_active" # ✅ FIXED: Field explicitly present now
         ]
 
 
@@ -170,9 +144,9 @@ class LeaveRequestDetailSerializer(serializers.ModelSerializer):
     Detail serializer for LeaveRequest.
     """
     leave_type = LeaveTypeDetailSerializer(read_only=True)
-    employee_name = serializers.CharField(source="membership.user.get_full_name", read_only=True)
+    employee_name = serializers.CharField(source="membership.user.username", read_only=True)
     department_name = serializers.CharField(source="membership.department.name", read_only=True)
-    approver_name = serializers.CharField(source="approved_by.user.get_full_name", read_only=True)
+    approver_name = serializers.CharField(source="approved_by.user.username", read_only=True)
 
     class Meta:
         model = LeaveRequest

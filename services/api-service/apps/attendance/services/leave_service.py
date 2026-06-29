@@ -51,6 +51,10 @@ class LeaveTypeService:
             allow_half_day=allow_half_day,
             requires_attachment=requires_attachment,
         )
+
+        from apps.attendance.services.leave_provisioning_service import LeaveBalanceProvisioningService
+        LeaveBalanceProvisioningService.provision_for_leave_type(leave_type=leave_type)
+        
         return leave_type
 
     @classmethod

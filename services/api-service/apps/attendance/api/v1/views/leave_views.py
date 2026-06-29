@@ -45,7 +45,7 @@ class MyLeaveBalancesAPI(BaseCompanyAPIView):
     GET /leave/me/leave-balances/
     Returns leave balances for the logged-in employee.
     """
-    required_permissions = {"GET": "attendance.view"}
+    required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request, *args, **kwargs):
         membership = request.membership
@@ -67,7 +67,7 @@ class MyLeaveRequestsAPI(BaseCompanyAPIView):
     GET /leave/me/leave-requests/
     POST /leave/me/leave-requests/
     """
-    required_permissions = {"GET": "attendance.view", "POST": "attendance.view"}
+    required_permissions = {"GET": "tenant.attendance.view", "POST": "tenant.attendance.view"}
     parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request, *args, **kwargs):
@@ -131,7 +131,7 @@ class MyLeaveRequestsAPI(BaseCompanyAPIView):
         response_serializer = LeaveRequestDetailSerializer(leave_request)
         return ApiResponse.success(
             data=response_serializer.data,
-            status_code=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -139,7 +139,7 @@ class MyLeaveRequestDetailAPI(BaseCompanyAPIView):
     """
     GET /leave/me/leave-requests/{id}/
     """
-    required_permissions = {"GET": "attendance.view"}
+    required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_my_request_detail(
@@ -147,7 +147,7 @@ class MyLeaveRequestDetailAPI(BaseCompanyAPIView):
             membership=request.membership,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestDetailSerializer(leave_request)
         return ApiResponse.success(data=serializer.data)
@@ -157,7 +157,7 @@ class MyLeaveRequestCancelAPI(BaseCompanyAPIView):
     """
     POST /leave/me/leave-requests/{id}/cancel/
     """
-    required_permissions = {"POST": "attendance.view"}
+    required_permissions = {"POST": "tenant.attendance.view"}
 
     def post(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_my_request_detail(
@@ -165,7 +165,7 @@ class MyLeaveRequestCancelAPI(BaseCompanyAPIView):
             membership=request.membership,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -184,7 +184,7 @@ class LeaveRequestListAPI(BaseCompanyAPIView):
     GET /leave/leave-requests/
     HR view for all company leave requests with statistics.
     """
-    required_permissions = {"GET": "attendance.manage"}
+    required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, *args, **kwargs):
         company = request.company
@@ -245,7 +245,7 @@ class LeaveRequestDetailAPI(BaseCompanyAPIView):
     """
     GET /leave/leave-requests/{id}/
     """
-    required_permissions = {"GET": "attendance.manage"}
+    required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_request_detail_for_hr(
@@ -253,7 +253,7 @@ class LeaveRequestDetailAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestDetailSerializer(leave_request)
         return ApiResponse.success(data=serializer.data)
@@ -263,7 +263,7 @@ class LeaveRequestApproveAPI(BaseCompanyAPIView):
     """
     POST /leave/leave-requests/{id}/approve/
     """
-    required_permissions = {"POST": "attendance.manage"}
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_by_id(
@@ -271,7 +271,7 @@ class LeaveRequestApproveAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestApproveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -289,7 +289,7 @@ class LeaveRequestRejectAPI(BaseCompanyAPIView):
     """
     POST /leave/leave-requests/{id}/reject/
     """
-    required_permissions = {"POST": "attendance.manage"}
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_by_id(
@@ -297,7 +297,7 @@ class LeaveRequestRejectAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestRejectSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -317,7 +317,7 @@ class LeaveRequestCancelHRAPI(BaseCompanyAPIView):
     POST /leave/leave-requests/{id}/cancel/
     HR cancel endpoint.
     """
-    required_permissions = {"POST": "attendance.manage"}
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, request_id, *args, **kwargs):
         leave_request = LeaveRequestSelector.get_by_id(
@@ -325,7 +325,7 @@ class LeaveRequestCancelHRAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_request:
-            return ApiResponse.not_found("Leave request not found.")
+            return ApiResponse.error("Leave request not found.")
 
         serializer = LeaveRequestCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -343,7 +343,7 @@ class EmployeeLeaveBalancesAPI(BaseCompanyAPIView):
     """
     GET /leave/employees/{membership_id}/leave-balances/
     """
-    required_permissions = {"GET": "attendance.manage"}
+    required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, membership_id, *args, **kwargs):
         from apps.companies.models import Membership
@@ -354,7 +354,7 @@ class EmployeeLeaveBalancesAPI(BaseCompanyAPIView):
                 company=request.company,
             )
         except Membership.DoesNotExist:
-            return ApiResponse.not_found("Employee not found.")
+            return ApiResponse.error("Employee not found.")
 
         leave_year = request.query_params.get("year")
         year = int(leave_year) if leave_year else timezone.now().year
@@ -372,7 +372,7 @@ class EmployeeLeaveRequestsAPI(BaseCompanyAPIView):
     """
     GET /leave/employees/{membership_id}/leave-requests/
     """
-    required_permissions = {"GET": "attendance.manage"}
+    required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, membership_id, *args, **kwargs):
         from apps.companies.models import Membership
@@ -383,7 +383,7 @@ class EmployeeLeaveRequestsAPI(BaseCompanyAPIView):
                 company=request.company,
             )
         except Membership.DoesNotExist:
-            return ApiResponse.not_found("Employee not found.")
+            return ApiResponse.error("Employee not found.")
 
         status_filter = request.query_params.get("status")
         leave_type_id = request.query_params.get("leave_type")
@@ -425,8 +425,8 @@ class LeaveTypeListCreateAPI(BaseCompanyAPIView):
     POST /leave/leave-types/
     """
     required_permissions = {
-        "GET": "attendance.view",
-        "POST": "attendance.manage",
+        "GET": "tenant.attendance.view",
+        "POST": "tenant.attendance.manage",
     }
 
     def get(self, request, *args, **kwargs):
@@ -452,7 +452,7 @@ class LeaveTypeListCreateAPI(BaseCompanyAPIView):
         response_serializer = LeaveTypeDetailSerializer(leave_type)
         return ApiResponse.success(
             data=response_serializer.data,
-            status_code=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -463,9 +463,9 @@ class LeaveTypeDetailUpdateDeleteAPI(BaseCompanyAPIView):
     DELETE /leave/leave-types/{id}/
     """
     required_permissions = {
-        "GET": "attendance.view",
-        "PUT": "attendance.manage",
-        "DELETE": "attendance.manage",
+        "GET": "tenant.attendance.view",
+        "PUT": "tenant.attendance.manage",
+        "DELETE": "tenant.attendance.manage",
     }
 
     def get(self, request, leave_type_id, *args, **kwargs):
@@ -474,7 +474,7 @@ class LeaveTypeDetailUpdateDeleteAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_type:
-            return ApiResponse.not_found("Leave type not found.")
+            return ApiResponse.error("Leave type not found.")
 
         serializer = LeaveTypeDetailSerializer(leave_type)
         return ApiResponse.success(data=serializer.data)
@@ -485,7 +485,7 @@ class LeaveTypeDetailUpdateDeleteAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_type:
-            return ApiResponse.not_found("Leave type not found.")
+            return ApiResponse.error("Leave type not found.")
 
         serializer = LeaveTypeCreateUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -504,7 +504,7 @@ class LeaveTypeDetailUpdateDeleteAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not leave_type:
-            return ApiResponse.not_found("Leave type not found.")
+            return ApiResponse.error("Leave type not found.")
 
         LeaveTypeService.deactivate(leave_type=leave_type)
         return ApiResponse.success(message="Leave type deactivated successfully.")
@@ -515,7 +515,7 @@ class LeaveBalanceListAPI(BaseCompanyAPIView):
     GET /leave/leave-balances/
     HR list view for company leave balances.
     """
-    required_permissions = {"GET": "attendance.manage"}
+    required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, *args, **kwargs):
         leave_year = request.query_params.get("year")
@@ -545,7 +545,7 @@ class LeaveBalanceAdjustAPI(BaseCompanyAPIView):
     """
     POST /leave/leave-balances/{id}/adjust/
     """
-    required_permissions = {"POST": "attendance.manage"}
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, balance_id, *args, **kwargs):
         balance = LeaveBalanceSelector.get_by_id(
@@ -553,7 +553,7 @@ class LeaveBalanceAdjustAPI(BaseCompanyAPIView):
             company=request.company,
         )
         if not balance:
-            return ApiResponse.not_found("Leave balance not found.")
+            return ApiResponse.error("Leave balance not found.")
 
         serializer = LeaveBalanceAdjustmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -573,7 +573,7 @@ class LeaveBalanceAllocateAPI(BaseCompanyAPIView):
     POST /leave/leave-balances/allocate/
     Yearly allocation endpoint.
     """
-    required_permissions = {"POST": "attendance.manage"}
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, *args, **kwargs):
         serializer = LeaveBalanceAllocationSerializer(data=request.data)
@@ -589,14 +589,14 @@ class LeaveBalanceAllocateAPI(BaseCompanyAPIView):
                 company=request.company,
             )
         except Membership.DoesNotExist:
-            return ApiResponse.not_found("Employee not found.")
+            return ApiResponse.error("Employee not found.")
 
         leave_type = LeaveTypeSelector.get_by_id(
             leave_type_id=data["leave_type_id"],
             company=request.company,
         )
         if not leave_type:
-            return ApiResponse.not_found("Leave type not found.")
+            return ApiResponse.error("Leave type not found.")
 
         allocated = LeaveBalanceService.yearly_allocation(
             company=request.company,

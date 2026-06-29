@@ -156,11 +156,15 @@ class CompanyInviteService:
                 email=invite.email, password=password, username=username
             )
 
-        Membership.objects.get_or_create(
+        membership, created = Membership.objects.get_or_create(
             user=user,
             company=invite.company,
             defaults={"role": invite.role, "department": invite.department},
         )
+
+        # ✅ INTEGRATION: Provision active policy allocations for the employee profile
+        from apps.attendance.services.leave_provisioning_service import LeaveBalanceProvisioningService
+        LeaveBalanceProvisioningService.provision_for_membership(membership=membership)
 
         invite.is_used = True
         invite.save(update_fields=["is_used"])

@@ -6,12 +6,14 @@ from apps.attendance.models.employee_attendance_override import EmployeeAttendan
 from apps.attendance.models.company_face_policy import CompanyFaceEnrollmentPolicy
 from apps.attendance.models.face_enrollment import FaceEnrollment
 from apps.attendance.models.holiday import Holiday
+from apps.attendance.models.leave import LeaveBalance, LeaveType
 
 
 # Register your models here.
 
 admin.site.register(Holiday)
 
+admin.site.register(LeaveType)
 
 
 @admin.register(CompanyFaceEnrollmentPolicy)
@@ -55,3 +57,5 @@ class EmployeeAttendanceOverrideAdmin(admin.ModelAdmin):
     list_filter = ["is_active", "validation_mode", "company"]
     search_fields = ["membership__user__username", "membership__user__email", "company__name", "reason"]
     filter_horizontal = ["allowed_methods", "allowed_locations"]
+
+
