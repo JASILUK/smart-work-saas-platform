@@ -1,109 +1,129 @@
 from django.urls import path
 
-# Core Work Schedule Management Views
-from apps.attendance.api.v1.views.attendance_access_views import AttendanceAccessResolutionAPI, AttendanceAccessRuleDetailAPI, AttendanceAccessRuleListCreateAPI, CompanyAttendanceDefaultAPI, EmployeeAttendanceOverrideDetailAPI, EmployeeAttendanceOverrideListCreateAPI
-from apps.attendance.api.v1.views.attendance_event_views import AttendanceBreakInAPI, AttendanceBreakOutAPI, AttendanceCheckInAPI, AttendanceCheckOutAPI, AttendanceEventDetailAPI, AttendanceEventListAPI, LiveAttendanceSummaryAPI, ManualAttendanceAPI
-from apps.attendance.api.v1.views.attendance_location_views import ActivateAttendanceLocationAPI, AttendanceLocationDetailAPI, AttendanceLocationListCreateAPI
-from apps.attendance.api.v1.views.biometric_log_views import BiometricLogDetailAPI, BiometricLogListAPI, ManualImportAPI, PushWebhookAPI
-from apps.attendance.api.v1.views.biometric_views import BiometricDeviceActivateAPI, BiometricDeviceDetailAPI, BiometricDeviceListCreateAPI, BiometricEmployeeMappingActivateAPI, BiometricEmployeeMappingDetailAPI, BiometricEmployeeMappingListCreateAPI
-from apps.attendance.api.v1.views.company_attendance_method_views import CompanyAttendanceMethodAPI, CompanyAttendanceMethodActionAPI
+# ─── 1. Core Work Schedule Management Views
+from apps.attendance.api.v1.views.attendance_access_views import (
+    AttendanceAccessResolutionAPI, AttendanceAccessRuleDetailAPI, 
+    AttendanceAccessRuleListCreateAPI, CompanyAttendanceDefaultAPI, 
+    EmployeeAttendanceOverrideDetailAPI, EmployeeAttendanceOverrideListCreateAPI
+)
+from apps.attendance.api.v1.views.attendance_event_views import (
+    AttendanceBreakInAPI, AttendanceBreakOutAPI, AttendanceCheckInAPI, 
+    AttendanceCheckOutAPI, AttendanceEventDetailAPI, AttendanceEventListAPI, 
+    LiveAttendanceSummaryAPI, ManualAttendanceAPI
+)
+from apps.attendance.api.v1.views.attendance_location_views import (
+    ActivateAttendanceLocationAPI, AttendanceLocationDetailAPI, AttendanceLocationListCreateAPI
+)
+from apps.attendance.api.v1.views.biometric_log_views import (
+    BiometricLogDetailAPI, BiometricLogListAPI, ManualImportAPI, PushWebhookAPI
+)
+from apps.attendance.api.v1.views.biometric_views import (
+    BiometricDeviceActivateAPI, BiometricDeviceDetailAPI, BiometricDeviceListCreateAPI, 
+    BiometricEmployeeMappingActivateAPI, BiometricEmployeeMappingDetailAPI, 
+    BiometricEmployeeMappingListCreateAPI
+)
+from apps.attendance.api.v1.views.company_attendance_method_views import (
+    CompanyAttendanceMethodAPI, CompanyAttendanceMethodActionAPI
+)
 from apps.attendance.api.v1.views.company_work_schedule_api import (
-    CompanyWorkScheduleAPI,
-    CompanyWorkScheduleDetailAPI,
-    CompanyWorkScheduleActivationAPI,
+    CompanyWorkScheduleAPI, CompanyWorkScheduleDetailAPI, CompanyWorkScheduleActivationAPI
 )
 
-# Core Holiday CRUD & Listing Views
-from apps.attendance.api.v1.views.daily_attendance_views import DailyAttendanceDetailAPI, DailyAttendanceFinalizeAPI, DailyAttendanceListAPI, DailyAttendanceReprocessAPI, DailyAttendanceReviewsAPI
+# ─── 2. Core Holiday CRUD & Listing Views
+from apps.attendance.api.v1.views.daily_attendance_views import (
+    DailyAttendanceDetailAPI, DailyAttendanceFinalizeAPI, DailyAttendanceListAPI, 
+    DailyAttendanceReprocessAPI, DailyAttendanceReviewsAPI
+)
 from apps.attendance.api.v1.views.employee_dashboard_view import EmployeeDashboardAPIView
-from apps.attendance.api.v1.views.face_enrollment_views import CompanyFaceEnrollmentPolicyAPI, EmployeeSelfEnrollmentAPI, FaceEnrollmentApproveAPI, FaceEnrollmentDetailAPI, FaceEnrollmentListAPI, FaceEnrollmentRejectAPI, FaceEnrollmentRevokeAPI, HRInstructionEnrollmentAPI
+from apps.attendance.api.v1.views.face_enrollment_views import (
+    CompanyFaceEnrollmentPolicyAPI, EmployeeSelfEnrollmentAPI, FaceEnrollmentApproveAPI, 
+    FaceEnrollmentDetailAPI, FaceEnrollmentListAPI, FaceEnrollmentRejectAPI, 
+    FaceEnrollmentRevokeAPI, HRInstructionEnrollmentAPI
+)
 from apps.attendance.api.v1.views.holiday_views import (
-    HolidayListCreateAPI,
-    HolidayDetailAPI,
-    HolidayImportAPI,
-    HolidayPreviewAPI,
+    HolidayListCreateAPI, HolidayDetailAPI, HolidayImportAPI, HolidayPreviewAPI
 )
 
-# ─── Integrated Employee History Module (✅ FIXED: Using the exact classes from your v1 files)
+# ─── 3. Employee History Module Views
+from apps.attendance.api.v1.views.hr_action_workflow_views import HRClearReviewAPIView, HRFinalizeRecordAPIView, HRManualBreakEndAPIView, HRManualBreakStartAPIView, HRManualCheckInAPIView, HRManualCheckOutAPIView, HRMarkNeedsReviewAPIView, HROverrideStatusAPIView, HRReprocessTimelineAPIView, HRUnlockRecordAPIView
+from apps.attendance.api.v1.views.hr_directory_views import HREmployeeAttendanceDirectoryAPIView
+from apps.attendance.api.v1.views.hr_profile_views import HREmployeeAttendanceProfileAPIView
+from apps.attendance.api.v1.views.hr_record_detail_views import HRAttendanceRecordDetailAPIView
 from apps.attendance.api.v1.views.my_attendance_views import (
-    MyAttendanceRecordsAPI, MyAttendanceSummaryAPI, MyAttendanceCalendarAPI, MyAttendanceDetailAPI, MyAttendanceTrendsView
+    MyAttendanceRecordsAPI, MyAttendanceSummaryAPI, MyAttendanceCalendarAPI, 
+    MyAttendanceDetailAPI, MyAttendanceTrendsView
 )
 from apps.attendance.api.v1.views.attendance_management_views import (
     AttendanceManagementListAPI, AttendanceManagementDetailAPI, AttendanceManagementAnalyticsAPI
 )
 
-# Core Shift Management Views
+# ─── 4. Reusable Core Shift Configurations Views
 from apps.attendance.api.v1.views.shift_views import (
-    ShiftListCreateAPI,
-    ShiftDetailAPI,
-    ActivateShiftAPI,
-    SetDefaultShiftAPI,
+    ShiftListCreateAPI, ShiftDetailAPI, ActivateShiftAPI, SetDefaultShiftAPI
 )
-
-# Employee Shift Assignment Views
 from apps.attendance.api.v1.views.employee_shift_assignemnt_view import (
-    EmployeeShiftAssignmentListCreateAPI,
-    EmployeeShiftAssignmentDetailAPI,
-    EndEmployeeShiftAssignmentAPI,
-    DeactivateEmployeeShiftAssignmentAPI,
-    BulkAssignEmployeeShiftAPI,
-    TransferEmployeeShiftAPI,
+    EmployeeShiftAssignmentListCreateAPI, EmployeeShiftAssignmentDetailAPI, 
+    EndEmployeeShiftAssignmentAPI, DeactivateEmployeeShiftAssignmentAPI, 
+    BulkAssignEmployeeShiftAPI, TransferEmployeeShiftAPI
 )
 
-# Attendance Policy Administration Views
+# ─── 5. Attendance Policy Administration Views
 from apps.attendance.api.v1.views.attendance_policy_views import (
-    AttendancePolicyDetailAPI,
-    AttendancePolicyUpdateAPI,
-    AttendancePolicyResetAPI,
+    AttendancePolicyDetailAPI, AttendancePolicyUpdateAPI, AttendancePolicyResetAPI
 )
 from apps.attendance.api.v1.views.verification_views import FaceVerifyAPIView, GPSVerifyAPIView
 
-
+# ─── 6. Leave Balances & Applications Management Views
 from apps.attendance.api.v1.views.leave_views import (
-    MyLeaveBalancesAPI,
-    MyLeaveRequestsAPI,
-    MyLeaveRequestDetailAPI,
-    MyLeaveRequestCancelAPI,
-    LeaveRequestListAPI,
-    LeaveRequestDetailAPI,
-    LeaveRequestApproveAPI,
-    LeaveRequestRejectAPI,
-    LeaveRequestCancelHRAPI,
-    EmployeeLeaveBalancesAPI,
-    EmployeeLeaveRequestsAPI,
-    LeaveTypeListCreateAPI,
-    LeaveTypeDetailUpdateDeleteAPI,
-    LeaveBalanceListAPI,
-    LeaveBalanceAdjustAPI,
-    LeaveBalanceAllocateAPI,
+    MyLeaveBalancesAPI, MyLeaveRequestsAPI, MyLeaveRequestDetailAPI, MyLeaveRequestCancelAPI, 
+    LeaveRequestListAPI, LeaveRequestDetailAPI, LeaveRequestApproveAPI, LeaveRequestRejectAPI, 
+    LeaveRequestCancelHRAPI, EmployeeLeaveBalancesAPI, EmployeeLeaveRequestsAPI, 
+    LeaveTypeListCreateAPI, LeaveTypeDetailUpdateDeleteAPI, LeaveBalanceListAPI, 
+    LeaveBalanceAdjustAPI, LeaveBalanceAllocateAPI
 )
 
+# ─── 7. HR Attendance Management Core Extensions (New Operations Dashboard)
+from apps.attendance.api.v1.views.hr_management_views import (
+    HRManualCorrectionAPIView, HRCompanyLedgerAPIView, 
+    HRDashboardSummaryAPIView, 
+)
+
+from apps.attendance.api.v1.views.hr_review_views import (
+    HRReviewDashboardAPIView, HRReviewQueueListAPIView, HRReviewItemDetailAPIView,
+    HRReviewAssignAPIView, HRReviewResolveAPIView, HRReviewNoteAPIView
+)
+
+from apps.attendance.api.v1.views.hr_report_views import (
+    HRCompanyReportSummaryAPIView, HRPayrollAttendanceDatasetAPIView, 
+    HRReportAnalyticsAPIView, HRReportExportTriggerAPIView, 
+    HRReportAutomationSchedulingAPIView, HRReportGenerationHistoryAPIView
+)
 
 
 app_name = "attendance"
 
 urlpatterns = [
     # =====================================================
-    # 1. COMPANY WORK SCHEDULE RULES
+    # COMPANY WORK SCHEDULE RULES
     # =====================================================
     path("schedule/", CompanyWorkScheduleAPI.as_view(), name="company-schedule"),
     path("schedule/detail/", CompanyWorkScheduleDetailAPI.as_view(), name="company-schedule-detail"),
     path("schedule/activation/", CompanyWorkScheduleActivationAPI.as_view(), name="company-schedule-activation"),
 
     # =====================================================
-    # 2. HOLIDAY COMPLIANCE CRUD
+    # HOLIDAY COMPLIANCE CRUD
     # =====================================================
     path("holidays/", HolidayListCreateAPI.as_view(), name="holiday-list-create"),
     path("holidays/<int:holiday_id>/", HolidayDetailAPI.as_view(), name="holiday-detail"),
 
     # =====================================================
-    # 3. EXTERNAL COMPLIANCE IMPORT PIPELINES
+    # EXTERNAL COMPLIANCE IMPORT PIPELINES
     # =====================================================
     path("holidays/import/", HolidayImportAPI.as_view(), name="holiday-import"),
     path("holidays/import/preview/", HolidayPreviewAPI.as_view(), name="holiday-import-preview"),
 
     # =====================================================
-    # 4. REUSABLE SHIFT CONFIGURATIONS
+    # REUSABLE SHIFT CONFIGURATIONS
     # =====================================================
     path("shifts/", ShiftListCreateAPI.as_view(), name="shift-list-create"),
     path("shifts/<int:public_id>/", ShiftDetailAPI.as_view(), name="shift-detail"),
@@ -111,7 +131,7 @@ urlpatterns = [
     path("shifts/<int:public_id>/set-default/", SetDefaultShiftAPI.as_view(), name="shift-set-default"),
 
     # =====================================================
-    # 5. EMPLOYEE SHIFT ASSIGNMENTS
+    # EMPLOYEE SHIFT ASSIGNMENTS
     # =====================================================
     path("assignments/", EmployeeShiftAssignmentListCreateAPI.as_view(), name="assignment-list-create"),
     path("assignments/<int:pk>/", EmployeeShiftAssignmentDetailAPI.as_view(), name="assignment-detail"),
@@ -121,7 +141,7 @@ urlpatterns = [
     path("assignments/bulk-assign/", BulkAssignEmployeeShiftAPI.as_view(), name="assignment-bulk-assign"),
 
     # =====================================================
-    # 6. ATTENDANCE INTERPRETATION POLICIES
+    # ATTENDANCE INTERPRETATION POLICIES
     # =====================================================
     path("policy/", AttendancePolicyDetailAPI.as_view(), name="attendance-policy-detail"),
     path("policy/update/", AttendancePolicyUpdateAPI.as_view(), name="attendance-policy-update"),
@@ -138,7 +158,7 @@ urlpatterns = [
     path("access/rules/", AttendanceAccessRuleListCreateAPI.as_view(), name="attendance-access-rules-list-create"),
     path("access/rules/<int:rule_id>/", AttendanceAccessRuleDetailAPI.as_view(), name="attendance-access-rule-detail"),
     path("access/overrides/", EmployeeAttendanceOverrideListCreateAPI.as_view(), name="attendance-access-overrides-list-create"),
-    path("access/overrides/<int:override_id>/", EmployeeAttendanceOverrideDetailAPI.as_view(), name="attendance-access-override-detail"),
+    path("access/rules/overrides/<int:override_id>/", EmployeeAttendanceOverrideDetailAPI.as_view(), name="attendance-access-override-detail"),
     path("access/resolve/", AttendanceAccessResolutionAPI.as_view(), name="attendance-access-resolve-profile"),
 
     path("face-enrollments/policy/", CompanyFaceEnrollmentPolicyAPI.as_view(), name="face-policy-management"),
@@ -181,29 +201,32 @@ urlpatterns = [
 
     path("dashboard/", EmployeeDashboardAPIView.as_view(), name="attendance-dashboard"),
 
-    # ─── My Attendance Module (✅ FIXED: Class names matched to your imports)
+    # =====================================================
+    # MY ATTENDANCE PORTAL
+    # =====================================================
     path("my-attendance/", MyAttendanceRecordsAPI.as_view(), name="my-attendance-list"),
     path("my-attendance/summary/", MyAttendanceSummaryAPI.as_view(), name="my-attendance-summary"),
     path("my-attendance/calendar/", MyAttendanceCalendarAPI.as_view(), name="my-attendance-calendar"),
     path("my-attendance/trends/", MyAttendanceTrendsView.as_view(), name="my-attendance-trends"),
     path("my-attendance/<int:pk>/", MyAttendanceDetailAPI.as_view(), name="my-attendance-detail"),
 
-
-
-    # ─── Attendance Management Module (✅ FIXED: Class names matched to your imports and parameters set to pk)
+    # =====================================================
+    # OLD WORKFORCE MANAGEMENT LOOKUPS
+    # =====================================================
     path("attendance-management/", AttendanceManagementListAPI.as_view(), name="attendance-management-list"),
     path("attendance-management/analytics/", AttendanceManagementAnalyticsAPI.as_view(), name="attendance-management-analytics"),
     path("attendance-management/<int:pk>/", AttendanceManagementDetailAPI.as_view(), name="attendance-management-detail"),
 
-
-
+    # =====================================================
+    # MY LEAVE REQUESTS
+    # =====================================================
     path("me/leave-balances/", MyLeaveBalancesAPI.as_view(), name="my-leave-balances"),
     path("me/leave-requests/", MyLeaveRequestsAPI.as_view(), name="my-leave-requests"),
     path("me/leave-requests/<int:request_id>/", MyLeaveRequestDetailAPI.as_view(), name="my-leave-request-detail"),
     path("me/leave-requests/<int:request_id>/cancel/", MyLeaveRequestCancelAPI.as_view(), name="my-leave-request-cancel"),
 
     # =====================================================
-    # HR LEAVE REQUEST MANAGEMENT
+    # HR ADMINISTRATIVE LEAVE CONSOLE
     # =====================================================
     path("leave-requests/", LeaveRequestListAPI.as_view(), name="leave-request-list"),
     path("leave-requests/<int:request_id>/", LeaveRequestDetailAPI.as_view(), name="leave-request-detail"),
@@ -212,13 +235,13 @@ urlpatterns = [
     path("leave-requests/<int:request_id>/cancel/", LeaveRequestCancelHRAPI.as_view(), name="leave-request-hr-cancel"),
 
     # =====================================================
-    # EMPLOYEE PROFILE APIs (HR VIEW)
+    # PROFILE METRICS LOOKUPS (HR VIEW)
     # =====================================================
     path("employees/<int:membership_id>/leave-balances/", EmployeeLeaveBalancesAPI.as_view(), name="employee-leave-balances"),
     path("employees/<int:membership_id>/leave-requests/", EmployeeLeaveRequestsAPI.as_view(), name="employee-leave-requests"),
 
     # =====================================================
-    # LEAVE TYPE CONFIGURATION
+    # LEAVE TYPE POLICIES ENTITIES
     # =====================================================
     path("leave-types/", LeaveTypeListCreateAPI.as_view(), name="leave-type-list"),
     path("leave-types/<int:leave_type_id>/", LeaveTypeDetailUpdateDeleteAPI.as_view(), name="leave-type-detail"),
@@ -229,4 +252,67 @@ urlpatterns = [
     path("leave-balances/", LeaveBalanceListAPI.as_view(), name="leave-balance-list"),
     path("leave-balances/<int:balance_id>/adjust/", LeaveBalanceAdjustAPI.as_view(), name="leave-balance-adjust"),
     path("leave-balances/allocate/", LeaveBalanceAllocateAPI.as_view(), name="leave-balance-allocate"),
-]
+
+    # =====================================================
+    # ADVANCED HR ATTENDANCE OPERATION SYSTEM MIGRATIONS (NEW)
+    # =====================================================
+   path("hr-management/dashboard-summary/", HRDashboardSummaryAPIView.as_view(), name="hr-dashboard-summary"),
+    path("hr-management/company-ledger/", HRCompanyLedgerAPIView.as_view(), name="hr-company-ledger"),
+    
+    path("hr-management/records/<int:record_id>/", HRAttendanceRecordDetailAPIView.as_view(), name="hr-record-detail"),
+
+   path("hr-management/records/<int:record_id>/actions/check-in/", HRManualCheckInAPIView.as_view(), name="hr-action-check-in"),
+    path("hr-management/records/<int:record_id>/actions/check-out/", HRManualCheckOutAPIView.as_view(), name="hr-action-check-out"),
+    path("hr-management/records/<int:record_id>/actions/break-start/", HRManualBreakStartAPIView.as_view(), name="hr-action-break-start"),
+    path("hr-management/records/<int:record_id>/actions/break-end/", HRManualBreakEndAPIView.as_view(), name="hr-action-break-end"),
+    
+    path("hr-management/records/<int:record_id>/actions/override-status/", HROverrideStatusAPIView.as_view(), name="hr-action-override-status"),
+    path("hr-management/records/<int:record_id>/actions/finalize/", HRFinalizeRecordAPIView.as_view(), name="hr-action-finalize"),
+    path("hr-management/records/<int:record_id>/actions/unlock/", HRUnlockRecordAPIView.as_view(), name="hr-action-unlock"),
+    path("hr-management/records/<int:record_id>/actions/reprocess/", HRReprocessTimelineAPIView.as_view(), name="hr-action-reprocess"),
+    path("hr-management/records/<int:record_id>/actions/recalculate/", HRReprocessTimelineAPIView.as_view(), name="hr-action-recalculate"), # Aligned aliases
+    
+    path("hr-management/records/<int:record_id>/actions/mark-review/", HRMarkNeedsReviewAPIView.as_view(), name="hr-action-mark-review"),
+    path("hr-management/records/<int:record_id>/actions/clear-review/", HRClearReviewAPIView.as_view(), name="hr-action-clear-review"),    
+    path("hr-management/corrections/manual-punch/", HRManualCorrectionAPIView.as_view(), name="hr-manual-correction"),
+    
+    path(
+        "hr/dashboard/summary/", 
+        HRDashboardSummaryAPIView.as_view(), 
+        name="hr-attendance-dashboard-summary"
+    ),
+
+    path(
+        "hr-management/employees/", 
+        HREmployeeAttendanceDirectoryAPIView.as_view(), 
+        name="hr-attendance-employee-directory"
+    ),
+
+    path(
+        "hr-management/employees/<int:membership_id>/",
+        HREmployeeAttendanceProfileAPIView.as_view(),
+        name="hr-attendance-employee-profile-detail"
+    ),
+
+
+    path("hr/review/dashboard/", HRReviewDashboardAPIView.as_view(), name="hr-review-dashboard"),
+    path("hr/review/", HRReviewQueueListAPIView.as_view(), name="hr-review-list"),
+    path("hr/review/<int:pk>/", HRReviewItemDetailAPIView.as_view(), name="hr-review-detail"),
+    
+    path("hr/review/<int:pk>/assign/", HRReviewAssignAPIView.as_view(), name="hr-review-assign"),
+    path("hr/review/<int:pk>/resolve/", HRReviewResolveAPIView.as_view(), name="hr-review-resolve"),
+    path("hr/review/<int:pk>/reject/", HRReviewResolveAPIView.as_view(), name="hr-review-reject"),
+    path("hr/review/<int:pk>/escalate/", HRReviewResolveAPIView.as_view(), name="hr-review-escalate"),
+    path("hr/review/<int:pk>/note/", HRReviewNoteAPIView.as_view(), name="hr-review-note"),
+
+
+
+    path("hr/reports/company/", HRCompanyReportSummaryAPIView.as_view(), name="hr-report-company-summary"),
+    path("hr/reports/payroll/", HRPayrollAttendanceDatasetAPIView.as_view(), name="hr-report-payroll-ledger"),
+    path("hr/reports/analytics/", HRReportAnalyticsAPIView.as_view(), name="hr-report-analytics-trends"),
+    
+    path("hr/reports/export/", HRReportExportTriggerAPIView.as_view(), name="hr-report-export-trigger"),
+    path("hr/reports/history/", HRReportGenerationHistoryAPIView.as_view(), name="hr-report-export-history"),
+    path("hr/reports/schedule/", HRReportAutomationSchedulingAPIView.as_view(), name="hr-report-schedule-rule"),
+
+    ]
