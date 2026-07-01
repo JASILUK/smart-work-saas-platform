@@ -1,7 +1,7 @@
 # apps/attendance/api/v1/views/hr_report_views.py
+from apps.companies.api.base import BaseCompanyAPIView
+from apps.core.api_response import ApiResponse
 from rest_framework import status
-from apps.shared.api.views import BaseCompanyAPIView
-from apps.utils.responses import ApiResponse
 from apps.attendance.selectors.hr_report_selectors import HRReportDataSelector
 from apps.attendance.services.hr_report_service import HRReportOrchestratorService
 from apps.attendance.models.report_models import HRReportGenerationHistory, HRReportAutomationSchedule

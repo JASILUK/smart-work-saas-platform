@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 from django.db.models import QuerySet, Q, Count, Case, When, Value, CharField, F
 from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus

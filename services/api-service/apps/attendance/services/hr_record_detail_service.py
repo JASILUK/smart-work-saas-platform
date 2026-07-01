@@ -1,4 +1,6 @@
 # apps/attendance/services/hr_record_detail_service.py
+from typing import Optional
+
 from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance
 from apps.attendance.selectors.hr_record_detail_selector import HRRecordDetailSelector

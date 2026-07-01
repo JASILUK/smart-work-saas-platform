@@ -2,9 +2,11 @@
 import datetime
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from apps.companies.selectors.Employee_selectors import EmployeeSelector
 from rest_framework.exceptions import ValidationError, NotFound
+
+# Core system imports
 from apps.companies.models import Company
-from apps.attendance.selectors.hr_profile_header_selector import HREmployeeHeaderSelector
 from apps.attendance.selectors.hr_profile_summary_selector import HREmployeeSummarySelector
 from apps.attendance.selectors.hr_profile_record_selector import HRProfileRecordSelector
 
@@ -50,9 +52,9 @@ class HREmployeeProfileOrchestratorService:
         """
         Verifies employee profiles and assembles cards, matrices, and list references into a single dictionary.
         """
-        # 1. Enforce object structural presence controls
+        # 1. Enforce object structural presence controls using your verified selector module
         try:
-            employee = HREmployeeHeaderSerializer.get_employee_header(company=company, membership_id=membership_id)
+            employee = EmployeeSelector.get_employee(company=company, employee_id=membership_id)
         except Exception:
             raise NotFound(f"Employee profile matching identifier key #{membership_id} was not found.")
 

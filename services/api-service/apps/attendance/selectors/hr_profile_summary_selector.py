@@ -34,7 +34,9 @@ class HREmployeeSummarySelector:
             half_days=Count("id", filter=Q(is_half_day=True)),
             early_exits=Count("id", filter=Q(is_early_exit=True)),
             auto_closed=Count("id", filter=Q(is_auto_closed=True)),
-            needs_review=Count("id", filter=Q(needs_review=True)),
+            
+            # FIXED: Renamed output alias from 'needs_review' to 'needs_review_count' to resolve FieldError
+            needs_review_count=Count("id", filter=Q(needs_review=True)),
             
             # Duration Sums (Stored inside schema ledger as integer minutes)
             sum_work_min=Sum("total_work_minutes"),
@@ -88,7 +90,9 @@ class HREmployeeSummarySelector:
             "total_overtime": round((aggregations["sum_ot_min"] or 0) / 60.0, 2),
             "early_exits": aggregations["early_exits"] or 0,
             "missing_checkouts": aggregations["missing_checkout"] or 0,
-            "needs_review": aggregations["needs_review"] or 0
+            
+            # FIXED: Read from the updated count key name here
+            "needs_review": aggregations["needs_review_count"] or 0
         }
 
     @classmethod

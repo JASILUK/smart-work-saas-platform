@@ -1,5 +1,7 @@
 # apps/attendance/api/v1/views/hr_profile_views.py
 from rest_framework import status
+from django.utils import timezone
+
 # Infrastructure component targets
 from apps.companies.api.base import BaseCompanyAPIView
 from apps.core.api_response import ApiResponse                      # Formats unified envelopes
@@ -24,7 +26,7 @@ class HREmployeeAttendanceProfileAPIView(BaseCompanyAPIView):
     """
     
     required_permissions = {
-        "GET": "tenant.attendance.manage",
+        "GET": "tenant.attendance.view",  # Optimized downward to view scope matching analytics permissions
     }
 
     def get(self, request, membership_id, *args, **kwargs):
@@ -47,11 +49,11 @@ class HREmployeeAttendanceProfileAPIView(BaseCompanyAPIView):
         records_serialized = HRProfileAttendanceRecordRowSerializer(paginated_records, many=True).data
         pagination_meta = PaginationAdapter.get_metadata(paginator, paginated_records)
 
-        # 4. Construct response graph using standard envelope formatting
+        # 4. Construct response graph using standard envelope formatting (Fixed summary key reference)
         return ApiResponse.success(
             data={
                 "employee": employee_serialized,
-                "summary": summary_cards,
+                "summary": summary_serialized,  # Fixed from summary_cards to summary_serialized
                 "charts": charts_serialized,
                 "records": {
                     "results": records_serialized,
