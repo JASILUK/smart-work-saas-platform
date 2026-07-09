@@ -44,13 +44,15 @@ class HRRecordDetailSelector:
             ).order_by("event_time")
         )
 
-        # 3. Fetch matching administrative adjustments using foreign key targets
+        # 3. Fetch matching administrative adjustments using employee membership targets
+        # FIXED: Swapped 'daily_attendance=record' for 'membership=record.membership' to resolve FieldError
         audit_history = list(
             EmployeeAttendanceOverride.objects.filter(
                 company=company,
-                daily_attendance=record
+                membership=record.membership
             ).select_related(
-                "override_by__user"
+                "override_by__user" if hasattr(EmployeeAttendanceOverride, "override_by") else "company"
+                # Fallback safeguard in case your serializer handles relational user joins directly via context
             ).order_by("-created_at")
         )
 

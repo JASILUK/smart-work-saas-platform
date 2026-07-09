@@ -1,6 +1,7 @@
 from django.contrib import admin
 from apps.attendance.models.company_attendance_default import CompanyAttendanceDefault
 from apps.attendance.models.attendance_access_rule import AttendanceAccessRule
+from apps.attendance.models.daily_attendance import DailyAttendance
 from apps.attendance.models.employee_attendance_override import EmployeeAttendanceOverride
 
 from apps.attendance.models.company_face_policy import CompanyFaceEnrollmentPolicy
@@ -15,6 +16,7 @@ admin.site.register(Holiday)
 
 admin.site.register(LeaveType)
 
+admin.site.register(DailyAttendance)
 
 @admin.register(CompanyFaceEnrollmentPolicy)
 class CompanyFaceEnrollmentPolicyAdmin(admin.ModelAdmin):

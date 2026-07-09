@@ -47,6 +47,7 @@ from apps.attendance.api.v1.views.holiday_views import (
 # ─── 3. Employee History Module Views
 from apps.attendance.api.v1.views.hr_action_workflow_views import HRClearReviewAPIView, HRFinalizeRecordAPIView, HRManualBreakEndAPIView, HRManualBreakStartAPIView, HRManualCheckInAPIView, HRManualCheckOutAPIView, HRMarkNeedsReviewAPIView, HROverrideStatusAPIView, HRReprocessTimelineAPIView, HRUnlockRecordAPIView
 from apps.attendance.api.v1.views.hr_directory_views import HREmployeeAttendanceDirectoryAPIView
+from apps.attendance.api.v1.views.hr_live_workforce_views import HRLiveWorkforceAPIView
 from apps.attendance.api.v1.views.hr_profile_views import HREmployeeAttendanceProfileAPIView
 from apps.attendance.api.v1.views.hr_record_detail_views import HRAttendanceRecordDetailAPIView
 from apps.attendance.api.v1.views.my_attendance_views import (
@@ -90,7 +91,7 @@ from apps.attendance.api.v1.views.hr_management_views import (
 
 from apps.attendance.api.v1.views.hr_review_views import (
     HRReviewDashboardAPIView, HRReviewQueueListAPIView, HRReviewItemDetailAPIView,
-    HRReviewAssignAPIView, HRReviewResolveAPIView, HRReviewNoteAPIView
+     HRReviewResolveAPIView, HRReviewNoteAPIView
 )
 
 from apps.attendance.api.v1.views.hr_report_views import (
@@ -282,6 +283,13 @@ urlpatterns = [
         name="hr-attendance-dashboard-summary"
     ),
 
+
+    path(
+        "hr/live-workforce/",
+        HRLiveWorkforceAPIView.as_view(),
+        name="hr-live-workforce"
+    ),
+
     path(
         "hr-management/employees/", 
         HREmployeeAttendanceDirectoryAPIView.as_view(), 
@@ -295,17 +303,11 @@ urlpatterns = [
     ),
 
 
-    path("hr/review/dashboard/", HRReviewDashboardAPIView.as_view(), name="hr-review-dashboard"),
-    path("hr/review/", HRReviewQueueListAPIView.as_view(), name="hr-review-list"),
-    path("hr/review/<int:pk>/", HRReviewItemDetailAPIView.as_view(), name="hr-review-detail"),
-    
-    path("hr/review/<int:pk>/assign/", HRReviewAssignAPIView.as_view(), name="hr-review-assign"),
-    path("hr/review/<int:pk>/resolve/", HRReviewResolveAPIView.as_view(), name="hr-review-resolve"),
-    path("hr/review/<int:pk>/reject/", HRReviewResolveAPIView.as_view(), name="hr-review-reject"),
-    path("hr/review/<int:pk>/escalate/", HRReviewResolveAPIView.as_view(), name="hr-review-escalate"),
-    path("hr/review/<int:pk>/note/", HRReviewNoteAPIView.as_view(), name="hr-review-note"),
-
-
+    path("hr/reviews/dashboard/", HRReviewDashboardAPIView.as_view(), name="hr-review-dashboard"),
+    path("hr/reviews/", HRReviewQueueListAPIView.as_view(), name="hr-review-list"),
+    path("hr/reviews/<int:record_id>/", HRReviewItemDetailAPIView.as_view(), name="hr-review-detail"),
+    path("hr/reviews/<int:record_id>/resolve/", HRReviewResolveAPIView.as_view(), name="hr-review-resolve"),
+    path("hr/reviews/<int:record_id>/note/", HRReviewNoteAPIView.as_view(), name="hr-review-note"),
 
     path("hr/reports/company/", HRCompanyReportSummaryAPIView.as_view(), name="hr-report-company-summary"),
     path("hr/reports/payroll/", HRPayrollAttendanceDatasetAPIView.as_view(), name="hr-report-payroll-ledger"),

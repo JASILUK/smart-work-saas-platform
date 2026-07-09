@@ -1,23 +1,18 @@
+# apps/attendance/selectors/hr_management_selector.py
 import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional
 from django.db.models import QuerySet, Count, Q
-from apps.companies.models import Company, Membership
+from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus
-from apps.attendance.models.attendance_event import AttendanceEvent
-from apps.attendance.constants.hr_foundation_constants import ComprehensiveDashboardSummaryDict
 
 class HRAttendanceManagementSelector:
     """
-    Enterprise-grade Selector executing company-wide, multi-tenant isolated queries.
-    Implements advanced query pre-fetching and annotations to fully eliminate N+1 overhead.
+    Selector executing multi-tenant isolated queries.
+    Implements optimized query pre-fetching to eliminate N+1 overhead.
     """
 
     @classmethod
     def get_base_hr_queryset(cls, *, company: Company) -> QuerySet[DailyAttendance]:
-        """
-        Builds the baseline, highly optimized corporate query grid.
-        Uses select_related to look up cross-domain relations in a single database pass.
-        """
         return DailyAttendance.objects.filter(company=company).select_related(
             "membership",
             "membership__user",
@@ -41,10 +36,6 @@ class HRAttendanceManagementSelector:
         search_query: Optional[str] = None,
         ordering: str = "-attendance_date"
     ) -> QuerySet[DailyAttendance]:
-        """
-        Queries and returns a filtered collections ledger matching administrative data grid parameters.
-        Includes a prefetch_related step to load relational history lists without causing query duplication.
-        """
         queryset = cls.get_base_hr_queryset(company=company)
 
         if date_from:
@@ -69,18 +60,11 @@ class HRAttendanceManagementSelector:
                 Q(membership__user__username__icontains=search_query)
             )
 
-        # Optimization Strategy: Batch load child rows to cleanly clear downstream N+1 lookups
-        return queryset.prefetch_related("membership__attendanceevent_set").order_by(ordering)
+        # FIXED: Changed from 'membership__attendanceevent_set' to match the related_name definition
+        return queryset.prefetch_related("membership__attendance_events").order_by(ordering)
 
     @classmethod
-    def get_aggregated_dashboard_summary(
-        cls, *, company: Company, target_date: datetime.date
-    ) -> ComprehensiveDashboardSummaryDict:
-        """
-        Calculates company analytics counters and departmental operational metrics.
-        Groups and references values by database integer IDs rather than raw strings.
-        """
-        # Global aggregation in a single query pass
+    def get_aggregated_dashboard_summary(cls, *, company: Company, target_date: datetime.date) -> dict:
         aggregations = DailyAttendance.objects.filter(
             company=company, attendance_date=target_date
         ).aggregate(
@@ -94,7 +78,6 @@ class HRAttendanceManagementSelector:
             review=Count("id", filter=Q(needs_review=True))
         )
 
-        # Departmental aggregation pass grouped by relational integer field
         dept_raw = DailyAttendance.objects.filter(
             company=company, attendance_date=target_date
         ).values(
@@ -109,7 +92,7 @@ class HRAttendanceManagementSelector:
         department_breakdown = [
             {
                 "department_id": item["membership__department_id"],
-                "department_name": item["membership__department__name"] or "Unassigned Sub-Unit",
+                "department_name": item["membership__department__name"] or "Unassigned Department",
                 "present_count": item["present"],
                 "absent_count": item["absent"],
                 "late_count": item["late"]

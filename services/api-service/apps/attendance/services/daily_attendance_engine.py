@@ -52,39 +52,48 @@ class DailyAttendanceEngine:
             required_work_minutes=policy["required_work_minutes"]
         )
 
+        # Approved leaves, holidays, and weekends are NOT structural anomalies.
         if is_leave:
             record.attendance_status = DailyAttendanceStatus.LEAVE
             record.is_absent = False
+            record.needs_review = False
             record.save()
             return record
 
         if is_holiday:
             record.attendance_status = DailyAttendanceStatus.HOLIDAY
             record.is_absent = False
+            record.needs_review = False
             record.save()
             return record
 
         if is_weekend:
             record.attendance_status = DailyAttendanceStatus.WEEKEND
             record.is_absent = False
+            record.needs_review = False
             record.save()
             return record
 
-        # Fallback to absent verification routing checks if timelines look empty
+        # Fallback to absent verification routing checks if timelines look empty (Routine Absence != Anomaly)
         if not events:
             record.attendance_status = DailyAttendanceStatus.ABSENT
             record.is_absent = True
+            record.needs_review = False
             record.save()
             return record
 
-        # Process active logs timeline parameters mapping tracking boundaries
+        # Filter check-in and check-out stream events
         ins = [e for e in events if e.event_type == AttendanceEventTypes.CHECK_IN]
         outs = [e for e in events if e.event_type == AttendanceEventTypes.CHECK_OUT]
 
         record.first_check_in_at = ins[0].event_time if ins else None
         record.last_check_out_at = outs[-1].event_time if outs else None
 
-        # Check for open missing terminal check-out exception conditions structures
+        # ========================================================================
+        # AUTOMATED ANOMALY DETECTION FRAMEWORK
+        # ========================================================================
+        
+        # Anomaly 1: Open missing terminal check-out event sequence
         if record.first_check_in_at and not record.last_check_out_at:
             record.attendance_status = DailyAttendanceStatus.INCOMPLETE
             record.needs_review = True
@@ -92,15 +101,47 @@ class DailyAttendanceEngine:
             record.save()
             return record
 
+        # Anomaly 2: Duplicate punches or out-of-order inverted sequence bounds
+        has_duplicate_checkin = len(ins) > 1
+        has_duplicate_checkout = len(outs) > 1
+        is_sequence_inverted = False
+        
+        if record.first_check_in_at and record.last_check_out_at:
+            if record.first_check_in_at >= record.last_check_out_at:
+                is_sequence_inverted = True
+
+        if has_duplicate_checkin or has_duplicate_checkout or is_sequence_inverted:
+            record.attendance_status = DailyAttendanceStatus.INCOMPLETE
+            record.needs_review = True
+            record.review_reason = (
+                f"Timeline structure anomaly: duplicate_in={has_duplicate_checkin}, "
+                f"duplicate_out={has_duplicate_checkout}, inverted_sequence={is_sequence_inverted}"
+            )
+            record.save()
+            return record
+
         # Compute intervals work ranges parameters
         record.total_break_minutes = cls.calculate_break_minutes(events)
         record.total_work_minutes = cls.calculate_work_minutes(record.first_check_in_at, record.last_check_out_at, record.total_break_minutes)
+
+        # Anomaly 3: Impossible time metric durations overflows
+        if record.total_work_minutes < 0 or (record.total_work_minutes + record.total_break_minutes) > 1440:
+            record.attendance_status = DailyAttendanceStatus.INCOMPLETE
+            record.needs_review = True
+            record.review_reason = "Impossible computed duration values recorded on daily tracker arrays."
+            record.save()
+            return record
 
         # Execute metric drift evaluation offsets loops
         cls.determine_lateness(record, schedule, policy)
         cls.determine_early_exit(record, schedule, policy)
         cls.determine_overtime(record, policy)
         cls.determine_status(record, policy)
+
+        # Final Verification Guard: Clean operational statuses clear standard review triggers
+        if record.attendance_status in [DailyAttendanceStatus.PRESENT, DailyAttendanceStatus.ABSENT, DailyAttendanceStatus.HALF_DAY]:
+            if not record.is_auto_closed:
+                record.needs_review = False
 
         record.save()
         return record
@@ -130,7 +171,6 @@ class DailyAttendanceEngine:
         if not record.first_check_in_at:
             return
         
-        # Convert timezone timestamps to local strings matching formatting indices
         checkin_time_str = record.first_check_in_at.astimezone().strftime("%H:%M")
         start_target = datetime.datetime.strptime(schedule["work_start_time"], "%H:%M")
         actual_time = datetime.datetime.strptime(checkin_time_str, "%H:%M")
@@ -192,7 +232,6 @@ class DailyAttendanceEngine:
     def reprocess_attendance(cls, *, company: Company, membership: Membership, target_date: datetime.date, actor: Membership) -> DailyAttendance:
         record = DailyAttendanceSelector.get_for_employee_date(company=company, membership=membership, target_date=target_date)
         if record and record.finalized_at:
-            # Explicit unlocking track bypass block used for direct manual recalculation overrides
             record.finalized_at = None
             record.save(update_fields=["finalized_at"])
             
@@ -207,12 +246,18 @@ class DailyAttendanceEngine:
         """
         Scans incomplete configurations, applying auto-checkout logic to unclosed shift records.
         """
-        records = DailyAttendance.objects.filter(company=company, attendance_date=target_date, attendance_status=DailyAttendanceStatus.INCOMPLETE, is_auto_closed=False)
+        records = DailyAttendance.objects.filter(
+            company=company, 
+            attendance_date=target_date, 
+            attendance_status=DailyAttendanceStatus.INCOMPLETE, 
+            is_auto_closed=False
+        )
         count = 0
         for rec in records:
             rec.is_auto_closed = True
             rec.auto_close_reason = "System automated tracking closure. Missing boundary timeout triggered."
-            rec.attendance_status = DailyAttendanceStatus.HALF_DAY  # Apply automated safety deduction rules
+            rec.attendance_status = DailyAttendanceStatus.HALF_DAY  # Safety metric deduction rule
+            rec.needs_review = True  # Auto-checkouts remain flagged for administrative visibility
             rec.save()
             count += 1
         return count

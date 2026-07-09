@@ -1,153 +1,256 @@
+# apps/attendance/selectors/hr_dashboard_selector.py
+
+from django.utils import timezone
+from django.db.models import QuerySet, Q, Count, OuterRef, Subquery, Exists, F
+from django.conf import settings
 import datetime
-from django.db.models import Q, Count, QuerySet, F
+
 from apps.companies.models import Company, Membership
-from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus
+from apps.attendance.models.attendance_event import AttendanceEvent, AttendanceEventTypes
+from apps.attendance.models.daily_attendance import DailyAttendance
+from apps.attendance.models.shift import Shift, EmployeeShiftAssignment
+from apps.attendance.selectors.holiday_selector import HolidaySelector
+
 
 class HRDashboardSelector:
     """
-    Executes high-performance database-level aggregations and annotations 
-    for the enterprise HR dashboard, ensuring multi-tenant data isolation.
+    Eagerly evaluates company-wide live telemetry contexts using raw punch events 
+    and date-effective shift assignments to eliminate N+1 processing loops.
     """
 
     @classmethod
-    def get_todays_overview_stats(cls, *, company: Company, target_date: datetime.date) -> dict:
+    def _get_date_range_in_utc(cls, target_date: datetime.date, tz_name: str = None) -> tuple:
         """
-        Computes all top-level KPI summary cards in a single database aggregation pass.
+        Convert a local date to UTC datetime range for accurate DB filtering.
+        Fixes: event_time__date mismatch when local date != UTC date.
         """
-        # Calculate total active employee headcount safely from the core membership tables
-        total_active_employees = Membership.objects.filter(
-            company=company, 
-            is_active=True
-        ).count()
-
-        aggregations = DailyAttendance.objects.filter(
-            company=company, 
-            attendance_date=target_date
-        ).aggregate(
-            present_count=Count("id", filter=Q(is_present=True)),
-            absent_count=Count("id", filter=Q(is_absent=True)),
-            half_day_count=Count("id", filter=Q(is_half_day=True)),
-            late_count=Count("id", filter=Q(is_late=True)),
-            leave_count=Count("id", filter=Q(is_leave=True)),
-            early_exit_count=Count("id", filter=Q(is_early_exit=True)),
-            auto_closed_count=Count("id", filter=Q(is_auto_closed=True)),
-            review_required_count=Count("id", filter=Q(needs_review=True)),
-            
-            # Currently working checks: checked in today but has not checked out yet
-            currently_working_count=Count(
-                "id", 
-                filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=True)
-            ),
-            # Checked out checks: has recorded both a check-in and check-out event
-            checked_out_count=Count(
-                "id", 
-                filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=False)
-            ),
-            # Missing checkout exception checks
-            missing_checkout_count=Count(
-                "id", 
-                filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=True, is_auto_closed=False, needs_review=True)
-            )
+        tz = timezone.get_default_timezone() if not tz_name else timezone.pytz.timezone(tz_name)
+        
+        start_local = datetime.datetime.combine(target_date, datetime.time.min)
+        end_local = datetime.datetime.combine(target_date, datetime.time.max)
+        
+        start_aware = timezone.make_aware(start_local, tz)
+        end_aware = timezone.make_aware(end_local, tz)
+        
+        return (
+            start_aware.astimezone(timezone.utc),
+            end_aware.astimezone(timezone.utc)
         )
 
-        present = aggregations["present_count"] or 0
-        leaves = aggregations["leave_count"] or 0
-        not_checked_in = max(0, total_active_employees - (present + leaves))
-        
-        attendance_pct = (present / total_active_employees * 100.0) if total_active_employees > 0 else 0.0
+    @classmethod
+    def get_active_memberships_queryset(cls, *, company: Company) -> QuerySet[Membership]:
+        return Membership.objects.filter(company=company, is_active=True).select_related("user", "department")
+
+    @classmethod
+    def compile_live_state_annotations(cls, *, company: Company, target_date: datetime.date) -> dict:
+        # FIXED: Use UTC datetime range instead of __date for timezone-safe filtering
+        start_utc, end_utc = cls._get_date_range_in_utc(target_date)
+
+        last_event_subquery = AttendanceEvent.objects.filter(
+            company=company,
+            membership=OuterRef("pk"),
+            event_time__range=(start_utc, end_utc)  # FIXED: was event_time__date=target_date
+        ).order_by("-event_time")
+
+        assignment_subquery = EmployeeShiftAssignment.objects.filter(
+            membership=OuterRef("pk"),
+            is_active=True,
+            effective_from__lte=target_date
+        ).filter(
+            Q(effective_until__isnull=True) | Q(effective_until__gte=target_date)
+        ).order_by("-effective_from")
+
+        first_check_in_subquery = AttendanceEvent.objects.filter(
+            company=company,
+            membership=OuterRef("pk"),
+            event_time__range=(start_utc, end_utc),  # FIXED
+            event_type=AttendanceEventTypes.CHECK_IN
+        ).order_by("event_time").values("event_time")
 
         return {
-            "total_employees": total_active_employees,
-            "present": present,
-            "currently_working": aggregations["currently_working_count"] or 0,
-            "checked_out": aggregations["checked_out_count"] or 0,
-            "not_checked_in": not_checked_in,
-            "on_leave": leaves,
-            "absent": aggregations["absent_count"] or 0,
-            "late": aggregations["late_count"] or 0,
-            "early_exit": aggregations["early_exit_count"] or 0,
-            "missing_checkout": aggregations["missing_checkout_count"] or 0,
-            "needs_review": aggregations["review_required_count"] or 0,
-            "company_attendance_percentage": round(attendance_pct, 2)
+            "has_shift": Exists(assignment_subquery),
+            "active_shift_id": Subquery(assignment_subquery.values("shift__id")[:1]),
+            "shift_name_annotation": Subquery(assignment_subquery.values("shift__name")[:1]),
+            "shift_start_annotation": Subquery(assignment_subquery.values("shift__start_time")[:1]),
+            "shift_end_annotation": Subquery(assignment_subquery.values("shift__end_time")[:1]),
+
+            "last_event_type": Subquery(last_event_subquery.values("event_type")[:1]),
+            "last_event_time": Subquery(last_event_subquery.values("event_time")[:1]),
+            "last_event_method": Subquery(last_event_subquery.values("attendance_method")[:1]),
+
+            "first_in_time": Subquery(first_check_in_subquery[:1]),
+            "has_check_in": Exists(AttendanceEvent.objects.filter(
+                company=company,
+                membership=OuterRef("pk"),
+                event_time__range=(start_utc, end_utc),  # FIXED
+                event_type=AttendanceEventTypes.CHECK_IN
+            )),
+            "has_check_out": Exists(AttendanceEvent.objects.filter(
+                company=company,
+                membership=OuterRef("pk"),
+                event_time__range=(start_utc, end_utc),  # FIXED
+                event_type=AttendanceEventTypes.CHECK_OUT
+            )),
         }
 
     @classmethod
-    def get_department_summaries(cls, *, company: Company, target_date: datetime.date) -> list:
-        """
-        Compiles performance metrics grouped by corporate departments using foreign key IDs.
-        """
-        # Aggregate stats directly inside the database grouped by department references
-        dept_data = DailyAttendance.objects.filter(
-            company=company, 
-            attendance_date=target_date,
-            membership__department__isnull=False
-        ).values(
-            "membership__department_id",
-            "membership__department__name"
-        ).annotate(
-            total_employees=Count("membership_id", distinct=True),
-            present=Count("id", filter=Q(is_present=True)),
-            currently_working=Count("id", filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=True)),
-            on_leave=Count("id", filter=Q(is_leave=True)),
-            absent=Count("id", filter=Q(is_absent=True)),
-            late=Count("id", filter=Q(is_late=True)),
-            review_count=Count("id", filter=Q(needs_review=True))
-        ).order_by("membership__department__name")
+    def get_dashboard_summary(cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time) -> dict:
+        annotations = cls.compile_live_state_annotations(company=company, target_date=target_date)
+        base_pool = cls.get_active_memberships_queryset(company=company).annotate(**annotations)
 
-        summaries = []
-        for item in dept_data:
-            emp_count = item["total_employees"] or 0
-            present_count = item["present"] or 0
-            pct = (present_count / emp_count * 100.0) if emp_count > 0 else 0.0
-            
-            summaries.append({
-                "department_id": item["membership__department_id"],
-                "department_name": item["membership__department__name"],
-                "employee_count": emp_count,
-                "present": present_count,
-                "currently_working": item["currently_working"] or 0,
-                "leave": item["on_leave"] or 0,
-                "absent": item["absent"] or 0,
-                "late": item["late"] or 0,
-                "attendance_percentage": round(pct, 2),
-                "review_count": item["review_count"] or 0
-            })
-        return summaries
+        aggregation = base_pool.aggregate(
+            total_employees=Count("id"),
+            scheduled_today=Count("id", filter=Q(has_shift=True)),
+            checked_in=Count("id", filter=Q(has_check_in=True)),
+            currently_working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
+            on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
+            checked_out=Count("id", filter=Q(has_check_out=True)),
+            absent_until_now=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local))
+        )
+
+        total = aggregation["scheduled_today"] or 1
+        present = aggregation["checked_in"] or 0
+        attendance_pct = round((present / total) * 100.0, 2)
+
+        is_today_holiday = HolidaySelector.is_holiday(company=company, holiday_date=target_date)
+        is_today_off = target_date.weekday() in [5, 6]
+
+        return {
+            "total_employees": aggregation["total_employees"] or 0,
+            "scheduled_today": aggregation["scheduled_today"] or 0,
+            "checked_in": present,
+            "currently_working": aggregation["currently_working"] or 0,
+            "on_break": aggregation["on_break"] or 0,
+            "checked_out": aggregation["checked_out"] or 0,
+            "absent_until_now": aggregation["absent_until_now"] or 0,
+            "attendance_percentage": attendance_pct,
+            "is_holiday": is_today_holiday,
+            "is_off_day": is_today_off
+        }
 
     @classmethod
-    def get_shift_summaries(cls, *, company: Company, target_date: datetime.date) -> list:
-        """
-        Aggregations mapping employee counts and lates across frozen schedule snapshots.
-        """
-        # Parse JSON snapshot variables at the database level using Django data field query paths
-        shift_data = DailyAttendance.objects.filter(
-            company=company,
-            attendance_date=target_date,
-            schedule_snapshot__has_key="shift_id"
-        ).values(
-            "schedule_snapshot__shift_id",
-            "schedule_snapshot__shift_name"
-        ).annotate(
-            assigned=Count("id"),
-            checked_in=Count("id", filter=Q(first_check_in_at__isnull=False)),
-            working=Count("id", filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=True)),
-            completed=Count("id", filter=Q(first_check_in_at__isnull=False, last_check_out_at__isnull=False)),
-            late=Count("id", filter=Q(is_late=True))
-        ).order_by("schedule_snapshot__shift_name")
+    def get_department_summary(cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time) -> list:
+        annotations = cls.compile_live_state_annotations(company=company, target_date=target_date)
 
-        summaries = []
-        for item in shift_data:
-            assigned = item["assigned"] or 0
-            checked_in = item["checked_in"] or 0
-            
-            summaries.append({
-                "shift_id": item["schedule_snapshot__shift_id"],
-                "shift_name": item["schedule_snapshot__shift_name"] or "Standard Corporate Shift",
-                "assigned_employees": assigned,
-                "checked_in": checked_in,
-                "working": item["working"] or 0,
-                "completed": item["completed"] or 0,
-                "not_checked_in": max(0, assigned - checked_in),
-                "late": item["late"] or 0
+        dept_summary = cls.get_active_memberships_queryset(company=company).annotate(**annotations).values(
+            "department__id", "department__name"
+        ).annotate(
+            employees=Count("id"),
+            working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
+            on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
+            checked_out=Count("id", filter=Q(has_check_out=True)),
+            absent=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local)),
+            not_started=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__gte=current_time_local))
+        )
+
+        return [
+            {
+                "department_id": item["department__id"] or 0,
+                "department_name": item["department__name"] or "Unassigned Department",
+                "employees_count": item["employees"],
+                "working_count": item["working"],
+                "break_count": item["on_break"],
+                "checked_out_count": item["checked_out"],
+                "leave_count": 0,
+                "absent_count": item["absent"],
+                "not_started_count": item["not_started"],
+                "attendance_percentage": round(((item["employees"] - item["absent"]) / (item["employees"] or 1)) * 100, 2)
+            }
+            for item in dept_summary
+        ]
+
+    @classmethod
+    def get_shift_summary(cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time) -> list:
+        annotations = cls.compile_live_state_annotations(company=company, target_date=target_date)
+        memberships_today = cls.get_active_memberships_queryset(company=company).annotate(**annotations)
+        company_shifts = Shift.objects.filter(company=company, is_active=True)
+        general_shift = company_shifts.filter(name__iexact="General").first()
+
+        shift_summary_list = []
+        for shift in company_shifts:
+            if general_shift and shift.id == general_shift.id:
+                shift_pool = memberships_today.filter(Q(active_shift_id=shift.id) | Q(active_shift_id__isnull=True))
+            else:
+                shift_pool = memberships_today.filter(active_shift_id=shift.id)
+
+            metrics = shift_pool.aggregate(
+                employees=Count("id"),
+                working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
+                on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
+                checked_out=Count("id", filter=Q(has_check_out=True)),
+                absent=Count("id", filter=Q(has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local)),
+                late=Count("id", filter=Q(has_check_in=True, first_in_time__time__gt=shift.start_time))
+            )
+
+            absent_count = metrics["absent"]
+            if general_shift and shift.id == general_shift.id:
+                unassigned_pool = memberships_today.filter(active_shift_id__isnull=True, has_check_in=False)
+                for mem in unassigned_pool:
+                    if shift.start_time < current_time_local:
+                        absent_count += 1
+
+            shift_summary_list.append({
+                "shift_id": shift.id,
+                "shift_name": shift.name,
+                "employees_count": metrics["employees"] or 0,
+                "working_count": metrics["working"] or 0,
+                "break_count": metrics["on_break"] or 0,
+                "checked_out_count": metrics["checked_out"] or 0,
+                "absent_count": absent_count,
+                "late_count": metrics["late"] or 0
             })
-        return summaries
+
+        return shift_summary_list
+
+    @classmethod
+    def get_live_workforce(cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time) -> list:
+        annotations = cls.compile_live_state_annotations(company=company, target_date=target_date)
+        pool = cls.get_active_memberships_queryset(company=company).annotate(**annotations).filter(
+            last_event_type__isnull=False
+        ).order_by("-last_event_time")[:20]
+
+        result = []
+        for mem in pool:
+            # FIXED: Status logic now checks last_event_type first for correct precedence
+            status_str = "NOT_STARTED"
+            
+            if mem.last_event_type == AttendanceEventTypes.CHECK_OUT:
+                status_str = "CHECKED_OUT"
+            elif mem.last_event_type == AttendanceEventTypes.BREAK_OUT:
+                status_str = "BREAK"
+            elif mem.has_check_in:
+                status_str = "WORKING"
+            elif mem.has_shift and mem.shift_start_annotation and mem.shift_start_annotation < current_time_local:
+                status_str = "ABSENT"
+
+            is_late_calculation = False
+            if mem.has_check_in and mem.first_in_time and mem.shift_start_annotation:
+                is_late_calculation = mem.first_in_time.time() > mem.shift_start_annotation
+
+            result.append({
+                "membership_id": mem.id,
+                "full_name": mem.user.get_full_name(),
+                "avatar_url": None,
+                "department_name": mem.department.name if mem.department else "Unassigned",
+                "shift_name": mem.shift_name_annotation or "General Shift",
+                "last_event_type": mem.last_event_type,
+                "last_event_time": mem.last_event_time,
+                "current_status": status_str,
+                "is_late": is_late_calculation
+            })
+
+        return result
+
+    @classmethod
+    def get_activity_feed(cls, *, company: Company, target_date: datetime.date) -> QuerySet[AttendanceEvent]:
+        # FIXED: Also use UTC range here for consistency
+        start_utc, end_utc = cls._get_date_range_in_utc(target_date)
+        
+        return AttendanceEvent.objects.filter(
+            company=company,
+            event_time__range=(start_utc, end_utc)  # FIXED: was event_time__date=target_date
+        ).select_related(
+            "membership",
+            "membership__user",
+            "membership__department"
+        ).order_by("-event_time")[:20]

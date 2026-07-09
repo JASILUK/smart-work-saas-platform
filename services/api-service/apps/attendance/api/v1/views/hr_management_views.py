@@ -1,14 +1,15 @@
-import datetime
-from typing import Any
+# apps/attendance/api/v1/views/hr_management_views.py
+from datetime import datetime
+
+from apps.attendance.selectors.hr_dashboard_selector import HRDashboardSelector
+from rest_framework import status
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from rest_framework import status
-
-# Core framework multi-tenant architecture & response components
+import zoneinfo
+from apps.companies.models import Company
 from apps.companies.api.base import BaseCompanyAPIView
-from apps.core.api_response import ApiResponse         # Extends standardized project success/error envelopes
+from apps.core.api_response import ApiResponse
 
-# Core business domain layers
 from apps.attendance.selectors.hr_management_selector import HRAttendanceManagementSelector
 from apps.attendance.services.hr_management_service import HRAttendanceManagementService
 from apps.attendance.validators.hr_foundation_validator import HRFoundationValidator
@@ -18,42 +19,89 @@ from apps.attendance.api.v1.serializers.hr_serializers import (
     HRManualPunchInjectionSerializer,
     HRStandardActionPayloadSerializer
 )
+from apps.attendance.api.v1.serializers.hr_dashboard_serializers import MasterDashboardResponseGraphSerializer
 
 class HRDashboardSummaryAPIView(BaseCompanyAPIView):
     """
-    Enterprise thin controller endpoint delivering the complete HR dashboard dataset summary.
+    Real-time multi-tenant operational control center view controller layer.
+    Compiles data metrics on demand using lightweight database-level annotations.
     """
     required_permissions = {
         "GET": "tenant.attendance.view",
     }
 
     def get(self, request, *args, **kwargs):
-        # request.company is pre-populated securely by your Permission Classes layer
         company = request.company
         
+        # 1. Parse date parameters, falling back to the target company's current timezone context
         date_param = request.query_params.get("date")
-        target_date = parse_date(date_param) if date_param else timezone.now().date()
+        company_tz_str = getattr(company, "timezone", "UTC")
+        
+        try:
+            local_zone = zoneinfo.ZoneInfo(company_tz_str)
+        except Exception:
+            local_zone = zoneinfo.ZoneInfo("UTC")
+
+        now_local = timezone.now().astimezone(local_zone)
+        target_date = parse_date(date_param) if date_param else now_local.date()
         
         if not target_date:
-            return ApiResponse.error(message="Invalid format provided for date parameter.", status=status.HTTP_400_BAD_REQUEST)
-            
-        summary_data = HRAttendanceManagementSelector.get_aggregated_dashboard_summary(
+            return ApiResponse.error(
+                message="Validation Error: Invalid format provided for date parameter.", 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Extract operational time configurations
+        current_time_local = now_local.time() if target_date == now_local.date() else datetime.time(23, 59, 59)
+
+        # 3. Assemble components using our read-only selectors
+        summary_cards = HRDashboardSelector.get_dashboard_summary(
+            company=company, target_date=target_date, current_time_local=current_time_local
+        )
+        departments_list = HRDashboardSelector.get_department_summary(
+            company=company, target_date=target_date, current_time_local=current_time_local
+        )
+        shifts_list = HRDashboardSelector.get_shift_summary(
+            company=company, target_date=target_date, current_time_local=current_time_local
+        )
+        live_workforce_list = HRDashboardSelector.get_live_workforce(
+            company=company, target_date=target_date, current_time_local=current_time_local
+        )
+        activity_feed_qs = HRDashboardSelector.get_activity_feed(
             company=company, target_date=target_date
         )
-        return ApiResponse.success(data=summary_data, message="Dashboard summary calculated successfully.")
 
+        # 4. Construct metadata payload definitions
+        metadata = {
+            "summary_date": target_date,
+            "generated_at": timezone.now(),
+            "timezone": company_tz_str,
+            "company_name": company.name
+        }
+
+        # 5. Serialize data structures into a single response object
+        master_payload = {
+            "summary": summary_cards,
+            "departments": departments_list,
+            "shift_distribution": shifts_list,
+            "live_workforce": live_workforce_list,
+            "activity_feed": activity_feed_qs,
+            "metadata": metadata
+        }
+
+        serializer = MasterDashboardResponseGraphSerializer(master_payload)
+        return ApiResponse.success(
+            data=serializer.data, 
+            message="Granular real-time corporate attendance dashboard summary compiled successfully."
+        )
+    
+
+    
 
 class HRCompanyLedgerAPIView(BaseCompanyAPIView):
-    """
-    Provides collection listings for the high-scale corporate daily attendance review grid.
-    """
-    required_permissions = {
-        "GET": "tenant.attendance.view",
-    }
+    required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request, *args, **kwargs):
-        company = request.company
-        
         # Parse query parameters safely
         date_from = parse_date(request.query_params.get("date_from", ""))
         date_to = parse_date(request.query_params.get("date_to", ""))
@@ -65,7 +113,7 @@ class HRCompanyLedgerAPIView(BaseCompanyAPIView):
         review_bool = review_req.lower() == "true" if review_req else None
         
         ledger_qs = HRAttendanceManagementSelector.list_daily_attendance_ledger(
-            company=company,
+            company=request.company,
             date_from=date_from,
             date_to=date_to,
             status=status_filter,
@@ -79,114 +127,78 @@ class HRCompanyLedgerAPIView(BaseCompanyAPIView):
 
 
 class HRRecordDetailAPIView(BaseCompanyAPIView):
-    """
-    Exposes detailed single-day time sheet summary graphs and transactional child rows.
-    """
-    required_permissions = {
-        "GET": "tenant.attendance.view",
-    }
+    required_permissions = {"GET": "tenant.attendance.view"}
 
     def get(self, request, record_id, *args, **kwargs):
-        company = request.company
-        
-        record = HRAttendanceManagementSelector.get_base_hr_queryset(company=company).filter(id=record_id).first()
+        record = HRAttendanceManagementSelector.get_base_hr_queryset(company=request.company).filter(id=record_id).first()
         HRFoundationValidator.validate_record_operational_state(record)
         
         serializer = HRRecordDetailResponseSerializer(record)
-        return ApiResponse.success(data=serializer.data, message="Detailed timesheet graph traced successfully.")
+        return ApiResponse.success(data=serializer.data, message="Detailed timesheet graph loaded.")
 
 
 class HRRecordFinalizeAPIView(BaseCompanyAPIView):
-    """
-    Locks an open daily attendance record sheet to freeze parameters before a payroll run.
-    """
-    required_permissions = {
-        "POST": "tenant.attendance.manage",
-    }
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, record_id, *args, **kwargs):
-        company = request.company
-        admin_actor = request.membership  # Provided automatically by CompanyContextPermission
-        
         serializer = HRStandardActionPayloadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         record = HRAttendanceManagementService.finalize_record(
-            company=company,
-            admin_actor=admin_actor,
-            record_id=record_id,
+            company=request.company,
+            admin_actor=request.membership,
+            record_id=int(record_id),
             reason=serializer.validated_data["reason"]
         )
-        return ApiResponse.success(message=f"Timesheet ledger row #{record.id} finalized successfully.")
+        return ApiResponse.success(message=f"Timesheet record row #{record.id} finalized successfully.")
 
 
 class HRRecordUnlockAPIView(BaseCompanyAPIView):
-    """
-    Removes processing locks from a finalized timesheet row to permit administrative revisions.
-    """
-    required_permissions = {
-        "POST": "tenant.attendance.manage",
-    }
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, record_id, *args, **kwargs):
-        company = request.company
-        admin_actor = request.membership
-        
         serializer = HRStandardActionPayloadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         record = HRAttendanceManagementService.unlock_record(
-            company=company,
-            admin_actor=admin_actor,
-            record_id=record_id,
+            company=request.company,
+            admin_actor=request.membership,
+            record_id=int(record_id),
             reason=serializer.validated_data["reason"]
         )
-        return ApiResponse.success(message=f"Timesheet ledger row #{record.id} opened for revisions.")
+        return ApiResponse.success(message=f"Timesheet record row #{record.id} unlocked successfully.")
 
 
 class HRRecordReprocessAPIView(BaseCompanyAPIView):
-    """
-    Forces a retrospective computation step using the core business calculations engine.
-    """
-    required_permissions = {
-        "POST": "tenant.attendance.manage",
-    }
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, record_id, *args, **kwargs):
-        company = request.company
-        
         serializer = HRStandardActionPayloadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         record = HRAttendanceManagementService.reprocess_record_timeline(
-            company=company,
-            record_id=record_id
+            company=request.company,
+            admin_actor=request.membership,
+            record_id=int(record_id),
+            reason=serializer.validated_data["reason"]
         )
         return ApiResponse.success(message=f"Calculations updated for record entry #{record.id}.")
 
 
 class HRManualCorrectionAPIView(BaseCompanyAPIView):
-    """
-    Injects missed workflow actions into an active data timeline log stream.
-    """
-    required_permissions = {
-        "POST": "tenant.attendance.manage",
-    }
+    required_permissions = {"POST": "tenant.attendance.manage"}
 
     def post(self, request, *args, **kwargs):
-        company = request.company
-        admin_actor = request.membership
-        
         serializer = HRManualPunchInjectionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         target_employee = HRFoundationValidator.validate_target_employee(
-            serializer.validated_data["membership_id"], company
+            serializer.validated_data["membership_id"], request.company
         )
         
         event = HRAttendanceManagementService.inject_manual_correction_event(
-            company=company,
-            admin_actor=admin_actor,
+            company=request.company,
+            admin_actor=request.membership,
             target_member=target_employee,
             data=serializer.validated_data
         )

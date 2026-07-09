@@ -1,90 +1,105 @@
+# apps/attendance/selectors/hr_review_selector.py
 import datetime
-from typing import Optional
-from django.db.models import QuerySet, Q, Count, Case, When, Value, CharField, F
+from django.db.models import QuerySet, Q, Count
+from django.utils import timezone
 from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus
-from apps.attendance.constants.hr_review_constants import HRReviewStatus, HRReviewPriority, HRAnomalyType
 
-class HRAttendanceReviewSelector:
+class HRReviewSelector:
     """
-    Isolates problematic attendance records across large tenant groups.
-    Computes priority tokens dynamically using low-level database constraints.
+    High-performance selector isolating anomalies from the DailyAttendance summary ledger.
+    Optimizes memory footprints and network queries using selective prefetching and indexes.
     """
 
     @classmethod
-    def get_review_queue_queryset(cls, *, company: Company, target_date: Optional[datetime.date] = None) -> QuerySet[DailyAttendance]:
+    def get_dashboard_metrics(cls, *, company: Company) -> dict:
         """
-        Queries and returns records matching active exception patterns.
-        Automatically skips clean data lines to protect system performance.
+        Executes an atomic database-level aggregation to fetch analytical metrics 
+        for the review queue overview sheet in a single query execution path.
         """
-        queryset = DailyAttendance.objects.filter(company=company).select_related(
-            "membership__user",
-            "membership__department",
-            "finalized_by"
-        )
-
-        if target_date:
-            queryset = queryset.filter(attendance_date=target_date)
-
-        # 1. Filter out clean logs and narrow lookups strictly to problematic sheets
-        queryset = queryset.filter(
-            Q(needs_review=True) | Q(is_auto_closed=True) | Q(attendance_status="REVIEW_REQUIRED")
-        )
-
-        # 2. Annotate Anomaly Category classifications inside the database
-        queryset = queryset.annotate(
-            computed_anomaly_type=Case(
-                When(is_auto_closed=True, then=Value(HRAnomalyType.AUTO_CLOSED)),
-                When(first_check_in_at__isnull=False, last_check_out_at__isnull=True, then=Value(HRAnomalyType.MISSING_CHECKOUT)),
-                When(is_late=True, late_minutes__gt=60, then=Value(HRAnomalyType.LATE_ARRIVAL)),
-                default=Value(HRAnomalyType.REVIEW_REQUIRED),
-                output_field=CharField()
-            )
-        )
-
-        # 3. Annotate Priority weight profiles dynamically based on severity indicators
-        queryset = queryset.annotate(
-            computed_priority=Case(
-                When(is_auto_closed=True, needs_review=True, then=Value(HRReviewPriority.CRITICAL)),
-                When(first_check_in_at__isnull=False, last_check_out_at__isnull=True, then=Value(HRReviewReason.MISSING_CHECKOUT)),
-                When(is_late=True, late_minutes__gt=60, then=Value(HRReviewPriority.HIGH)),
-                default=Value(HRReviewPriority.MEDIUM),
-                output_field=CharField()
-            )
-        )
-
-        # 4. Generate dynamic status indicators matching your dashboard requirements
-        queryset = queryset.annotate(
-            computed_review_status=Case(
-                When(finalized_at__isnull=False, then=Value(HRReviewStatus.RESOLVED)),
-                When(finalized_at__isnull=True, finalized_by__isnull=False, then=Value(HRReviewStatus.IN_REVIEW)),
-                default=Value(HRReviewStatus.PENDING),
-                output_field=CharField()
-            )
-        )
-
-        return queryset
-
-    @classmethod
-    def get_queue_dashboard_metrics(cls, *, company: Company) -> dict:
-        """
-        Assembles compliance counters and critical metrics in a single database aggregation pass.
-        """
-        base_qs = cls.get_review_queue_queryset(company=company)
+        today = timezone.now().date()
         
-        aggregations = base_qs.aggregate(
-            total_pending=Count("id", filter=Q(computed_review_status=HRReviewStatus.PENDING)),
-            critical_priority=Count("id", filter=Q(computed_priority=HRReviewPriority.CRITICAL)),
-            high_priority=Count("id", filter=Q(computed_priority=HRReviewPriority.HIGH)),
-            auto_closed_count=Count("id", filter=Q(computed_anomaly_type=HRAnomalyType.AUTO_CLOSED)),
-            missing_checkout_count=Count("id", filter=Q(computed_anomaly_type=HRAnomalyType.MISSING_CHECKOUT)),
-            resolved_today=Count("id", filter=Q(computed_review_status=HRReviewStatus.RESOLVED, updated_at__date=timezone.now().date()))
+        metrics = DailyAttendance.objects.filter(
+            company=company,
+            needs_review=True
+        ).aggregate(
+            review_count=Count("id"),
+            auto_closed_count=Count("id", filter=Q(is_auto_closed=True)),
+            missing_checkout_count=Count(
+                "id", 
+                filter=Q(
+                    first_check_in_at__isnull=False, 
+                    last_check_out_at__isnull=True, 
+                    is_auto_closed=False
+                )
+            ),
+            # Duplicate punches frequently trigger specific log trace indicators in review_reason strings
+            duplicate_punches_count=Count(
+                "id", 
+                filter=Q(review_reason__icontains="duplicate") | Q(review_reason__icontains="double")
+            ),
+            unresolved_count=Count("id", filter=Q(finalized_at__isnull=True)),
+            today_review_count=Count("id", filter=Q(attendance_date=today))
         )
 
         return {
-            "total_pending_review": aggregations["total_pending"] or 0,
-            "high_priority_alerts": (aggregations["critical_priority"] or 0) + (aggregations["high_priority"] or 0),
-            "auto_closed_sheets": aggregations["auto_closed_count"] or 0,
-            "missing_checkouts": aggregations["missing_checkout_count"] or 0,
-            "resolved_today_count": aggregations["resolved_today"] or 0,
+            "review_count": metrics["review_count"] or 0,
+            "auto_closed_count": metrics["auto_closed_count"] or 0,
+            "missing_checkout_count": metrics["missing_checkout_count"] or 0,
+            "duplicate_punches_count": metrics["duplicate_punches_count"] or 0,
+            "unresolved_count": metrics["unresolved_count"] or 0,
+            "today_review_count": metrics["today_review_count"] or 0,
         }
+
+    @classmethod
+    def list_review_records(cls, *, company: Company, filters: dict) -> QuerySet[DailyAttendance]:
+        """
+        Builds a single-pass optimized dataset query mapping filters down indexed database boundaries.
+        """
+        queryset = DailyAttendance.objects.select_related(
+            "membership",
+            "membership__user",
+            "membership__department"
+        ).filter(
+            company=company,
+            needs_review=True
+        )
+
+        # Apply standard parameters filters
+        if filters.get("date"):
+            queryset = queryset.filter(attendance_date=filters["date"])
+        if filters.get("date_from") and filters.get("date_to"):
+            queryset = queryset.filter(attendance_date__range=(filters["date_from"], filters["date_to"]))
+        if filters.get("department"):
+            queryset = queryset.filter(membership__department_id=filters["department"])
+        if filters.get("employee"):
+            queryset = queryset.filter(membership_id=filters["employee"])
+        if filters.get("status"):
+            queryset = queryset.filter(attendance_status=filters["status"])
+        if filters.get("review_reason"):
+            queryset = queryset.filter(review_reason__icontains=filters["review_reason"])
+            
+        if filters.get("search"):
+            search_query = filters["search"]
+            queryset = queryset.filter(
+                Q(membership__user__first_name__icontains=search_query) |
+                Q(membership__user__last_name__icontains=search_query) |
+                Q(membership__user__email__icontains=search_query) |
+                Q(review_reason__icontains=search_query)
+            )
+
+        ordering = filters.get("ordering", "-attendance_date")
+        return queryset.order_by(ordering)
+
+    @classmethod
+    def get_review_record(cls, *, company: Company, record_id: int) -> DailyAttendance:
+        """
+        Retrieves a locked row with full related context parameters inside an evaluation window block.
+        """
+        return DailyAttendance.objects.select_related(
+            "membership",
+            "membership__user"
+        ).filter(
+            id=record_id, 
+            company=company
+        ).first()

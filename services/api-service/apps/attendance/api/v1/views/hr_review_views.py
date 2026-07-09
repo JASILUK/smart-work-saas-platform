@@ -1,107 +1,115 @@
 # apps/attendance/api/v1/views/hr_review_views.py
 from rest_framework import status
-from django.utils.dateparse import parse_date
-
-# Core architectural boundaries
 from apps.companies.api.base import BaseCompanyAPIView
 from apps.core.api_response import ApiResponse
-from apps.core.standers_pagination import (
-    StandardLimitOffsetPagination, 
-    PaginationAdapter
-)          
+from apps.core.standers_pagination import StandardLimitOffsetPagination, PaginationAdapter
 
-# Selector and service bindings
-from apps.attendance.selectors.hr_review_selector import HRAttendanceReviewSelector
-from apps.attendance.services.hr_review_workflow_service import HRReviewWorkflowService
-from apps.attendance.api.v1.serializers.hr_review_serializers import (
-    HRReviewQueueDashboardSerializer, HRReviewQueueRowSerializer, 
-    HRReviewActionInputSerializer, HRReviewAssignmentInputSerializer
-)
+# Architectural domain bindings
+from apps.attendance.selectors.hr_review_selector import HRReviewSelector
+from apps.attendance.services.hr_review_service import HRReviewService
 from apps.attendance.services.hr_record_detail_service import HRRecordDetailService
 from apps.attendance.api.v1.serializers.hr_record_detail_serializers import ComprehensiveAttendanceRecordDetailSerializer
+from apps.attendance.api.v1.serializers.hr_review_serializers import (
+    HRReviewDashboardMetricsSerializer,
+    HRReviewQueueRowSerializer,
+    HRReviewResolveInputSerializer,
+    HRReviewNoteInputSerializer
+)
 
 class HRReviewDashboardAPIView(BaseCompanyAPIView):
+    """
+    Exposes high-speed compiled telemetry variables summary metrics for the queue header display.
+    """
     required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, *args, **kwargs):
-        metrics = HRAttendanceReviewSelector.get_queue_dashboard_metrics(company=request.company)
-        serializer = HRReviewQueueDashboardSerializer(metrics)
-        return ApiResponse.success(data=serializer.data, message="Queue metadata indicators loaded successfully.")
+        metrics_graph = HRReviewSelector.get_dashboard_metrics(company=request.company)
+        serializer = HRReviewDashboardMetricsSerializer(metrics_graph)
+        return ApiResponse.success(data=serializer.data, message="Review queue overview indicators synchronized.")
 
 class HRReviewQueueListAPIView(BaseCompanyAPIView):
+    """
+    Serves a paginated subset of processing exceptions for the corporate administration overview grid.
+    """
     required_permissions = {"GET": "tenant.attendance.manage"}
 
     def get(self, request, *args, **kwargs):
-        # 1. Fetch our highly optimized query graph template
-        raw_queryset = HRAttendanceReviewSelector.get_review_queue_queryset(company=request.company)
-
-        # 2. Apply parameters filter criteria safely from the request payload
-        if request.query_params.get("anomaly_type"):
-            raw_queryset = raw_queryset.filter(computed_anomaly_type=request.query_params.get("anomaly_type"))
-        if request.query_params.get("priority"):
-            raw_queryset = raw_queryset.filter(computed_priority=request.query_params.get("priority"))
-
-        # 3. Apply standard limit-offset pagination configurations server-side
-        paginator = StandardLimitOffsetPagination()
-        paginated_qs = paginator.paginate_queryset(raw_queryset, request, view=self)
+        # Extract query payload filter configurations parameters dictionary
+        filter_bounds = request.query_params.dict()
         
-        serializer = HRReviewQueueRowSerializer(paginated_qs, many=True)
-        pagination_meta = PaginationAdapter.get_metadata(paginator, paginated_qs)
-
-        return ApiResponse.success(data={"results": serializer.data, "pagination": pagination_meta}, message="Review queue feed loaded.")
+        queryset_stream = HRReviewSelector.list_review_records(company=request.company, filters=filter_bounds)
+        
+        paginator = StandardLimitOffsetPagination()
+        paginated_records = paginator.paginate_queryset(queryset_stream, request, view=self)
+        
+        serializer = HRReviewQueueRowSerializer(paginated_records, many=True)
+        pagination_meta = PaginationAdapter.get_metadata(paginator, paginated_records)
+        
+        return ApiResponse.success(
+            data={"results": serializer.data, "pagination": pagination_meta}, 
+            message="Review exception logs queue loaded successfully."
+        )
 
 class HRReviewItemDetailAPIView(BaseCompanyAPIView):
+    """
+    Deep-links into the primary historical timesheet record investigation graph packet.
+    """
     required_permissions = {"GET": "tenant.attendance.manage"}
 
-    def get(self, request, pk, *args, **kwargs):
-        """
-        Reuses the comprehensive detail packet definition contract from Phase 4.
-        """
-        packet = HRRecordDetailService.compile_detailed_record_packet(company=request.company, record_id=int(pk))
+    def get(self, request, record_id, *args, **kwargs):
+        # Enforce strict cross-tenant isolation by passing request.company straight down
+        packet = HRRecordDetailService.compile_detailed_record_packet(
+            company=request.company, 
+            record_id=int(record_id)
+        )
         if not packet:
-            return ApiResponse.error(message="Target exception record not found.", status=status.HTTP_404_NOT_FOUND)
+            return ApiResponse.error(message="Target investigative record row was not found.", status=status.HTTP_404_NOT_FOUND)
             
         serializer = ComprehensiveAttendanceRecordDetailSerializer(packet)
-        return ApiResponse.success(data=serializer.data, message="Review row metrics graph loaded.")
-
-class HRReviewAssignAPIView(BaseCompanyAPIView):
-    required_permissions = {"POST": "tenant.attendance.manage"}
-
-    def post(self, request, pk, *args, **kwargs):
-        serializer = HRReviewAssignmentInputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        HRReviewWorkflowService.assign_reviewer_to_item(
-            company=request.company, actor=request.membership, record_id=int(pk),
-            reviewer_id=serializer.validated_data["reviewer_id"], note=serializer.validated_data["reason"]
-        )
-        return ApiResponse.success(message="Reviewer profile mapped successfully onto exception target.")
+        return ApiResponse.success(data=serializer.data, message="Investigative timeline record packet loaded.")
 
 class HRReviewResolveAPIView(BaseCompanyAPIView):
+    """
+    Acknowledge verification and clear active exception flags for the daily ledger statement record.
+    """
     required_permissions = {"POST": "tenant.attendance.manage"}
 
-    def post(self, request, pk, *args, **kwargs):
-        serializer = HRReviewActionInputSerializer(data=request.data)
+    def post(self, request, record_id, *args, **kwargs):
+        serializer = HRReviewResolveInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Pull the incoming action parameter mapping string directly out of the route request elements
-        action_route = self.request.path.split("/")[-2].upper()  # Mapped token profiles: RESOLVE, REJECT, ESCALATE
-        
-        HRReviewWorkflowService.resolve_exception_item(
-            company=request.company, actor=request.membership, record_id=int(pk),
-            resolution_status=action_route, note=serializer.validated_data["reason"]
+        resolved_record = HRReviewService.resolve_review(
+            company=request.company,
+            actor=request.membership,
+            record_id=int(record_id),
+            justification=serializer.validated_data["reason"]
         )
-        return ApiResponse.success(message=f"Exception status action token tracking change applied: {action_route}")
+        
+        response_data = HRReviewQueueRowSerializer(resolved_record).data
+        return ApiResponse.success(
+            data=response_data, 
+            message="Timesheet calculation anomaly resolved and verified successfully."
+        )
 
 class HRReviewNoteAPIView(BaseCompanyAPIView):
+    """
+    Appends an evaluation comment node straight onto the unalterable audit ledger trace stream.
+    """
     required_permissions = {"POST": "tenant.attendance.manage"}
 
-    def post(self, request, pk, *args, **kwargs):
-        serializer = HRReviewActionInputSerializer(data=request.data)
+    def post(self, request, record_id, *args, **kwargs):
+        serializer = HRReviewNoteInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        HRReviewWorkflowService.append_internal_review_note(
-            company=request.company, actor=request.membership, record_id=int(pk),
+        updated_record = HRReviewService.append_note(
+            company=request.company,
+            actor=request.membership,
+            record_id=int(record_id),
             note_text=serializer.validated_data["reason"]
         )
-        return ApiResponse.success(message="Discussion statement appended successfully onto evaluation trail.")
+        
+        response_data = HRReviewQueueRowSerializer(updated_record).data
+        return ApiResponse.success(
+            data=response_data, 
+            message="Investigation discussion narrative log written onto tracking node."
+        )
