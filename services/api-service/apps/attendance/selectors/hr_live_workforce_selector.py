@@ -3,8 +3,8 @@
 import datetime
 from typing import Optional
 from django.db.models import (
-    QuerySet, Q, Count, OuterRef, Subquery, Exists, F, 
-    Case, When, Value, CharField, IntegerField, BooleanField, DurationField
+    QuerySet, Q, Count, OuterRef, Subquery, Exists, F,
+    Case, When, Value, CharField, IntegerField, BooleanField
 )
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -21,10 +21,9 @@ class HRLiveWorkforceSelector:
     High-performance selector for the Live Workforce page.
     Derives real-time employee operational state from AttendanceEvents,
     ShiftAssignments, and time context. Uses DailyAttendance only for
-    review flags, late minutes, and record IDs — never for primary status.
+    review flags, late minutes, and record IDs.
     """
 
-    # ── Status Constants ──────────────────────────────────────────────
     STATUS_WORKING = "WORKING"
     STATUS_BREAK = "BREAK"
     STATUS_CHECKED_OUT = "CHECKED_OUT"
@@ -35,25 +34,14 @@ class HRLiveWorkforceSelector:
     STATUS_WEEKEND = "WEEKEND"
     STATUS_REVIEW_REQUIRED = "REVIEW_REQUIRED"
 
-    # ── Base Queryset ───────────────────────────────────────────────────
-
     @classmethod
     def get_base_queryset(cls, *, company: Company) -> QuerySet[Membership]:
-        """Foundation queryset with all required relations pre-loaded."""
         return Membership.objects.filter(company=company, is_active=True).select_related(
-            "user",
-            "department",
-            "role"
+            "user", "department", "role"
         )
-
-    # ── UTC Date Range Helper ───────────────────────────────────────────
 
     @classmethod
     def _get_utc_range(cls, target_date: datetime.date) -> tuple:
-        """
-        Convert local calendar date to UTC datetime range.
-        Critical: AttendanceEvent stores UTC timestamps.
-        """
         tz = timezone.get_default_timezone()
         start_local = datetime.datetime.combine(target_date, datetime.time.min)
         end_local = datetime.datetime.combine(target_date, datetime.time.max)
@@ -64,43 +52,26 @@ class HRLiveWorkforceSelector:
             end_aware.astimezone(timezone.utc)
         )
 
-    # ── Live Event Annotations ────────────────────────────────────────
-
     @classmethod
     def annotate_live_events(cls, *, company: Company, target_date: datetime.date) -> dict:
-        """
-        Build annotation dict for today's AttendanceEvent-derived state.
-        All event filters use UTC range, never __date.
-        """
         start_utc, end_utc = cls._get_utc_range(target_date)
 
-        # Latest event of any type today
         latest_event_qs = AttendanceEvent.objects.filter(
-            company=company,
-            membership=OuterRef("pk"),
+            company=company, membership=OuterRef("pk"),
             event_time__range=(start_utc, end_utc)
         ).order_by("-event_time")
 
-        # First check-in today
         first_in_qs = AttendanceEvent.objects.filter(
-            company=company,
-            membership=OuterRef("pk"),
+            company=company, membership=OuterRef("pk"),
             event_time__range=(start_utc, end_utc),
             event_type=AttendanceEventTypes.CHECK_IN
         ).order_by("event_time")
 
-        # Last check-out today
         last_out_qs = AttendanceEvent.objects.filter(
-            company=company,
-            membership=OuterRef("pk"),
+            company=company, membership=OuterRef("pk"),
             event_time__range=(start_utc, end_utc),
             event_type=AttendanceEventTypes.CHECK_OUT
         ).order_by("-event_time")
-
-        # Total break duration: sum of (BREAK_IN - BREAK_OUT) pairs
-        # We compute this at the Python level for simplicity; 
-        # for DB-level, a custom function would be needed.
-        # Here we annotate existence flags for break state.
 
         return {
             "evt_last_type": Subquery(latest_event_qs.values("event_type")[:1]),
@@ -112,44 +83,68 @@ class HRLiveWorkforceSelector:
             "evt_has_check_out": Exists(last_out_qs),
         }
 
-    # ── Shift Annotations ───────────────────────────────────────────────
-
     @classmethod
-    def annotate_shift(cls, *, target_date: datetime.date) -> dict:
-        """
-        Resolve effective shift assignment for target_date.
-        Uses date-effective EmployeeShiftAssignment.
-        """
+    def annotate_shift(cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time) -> dict:
         assignment_qs = EmployeeShiftAssignment.objects.filter(
-            membership=OuterRef("pk"),
-            is_active=True,
+            membership=OuterRef("pk"), is_active=True,
             effective_from__lte=target_date
         ).filter(
             Q(effective_until__isnull=True) | Q(effective_until__gte=target_date)
         ).order_by("-effective_from")
 
-        return {
-            "shift_id": Subquery(assignment_qs.values("shift__id")[:1]),
-            "shift_name": Subquery(assignment_qs.values("shift__name")[:1]),
-            "shift_start": Subquery(assignment_qs.values("shift__start_time")[:1]),
-            "shift_end": Subquery(assignment_qs.values("shift__end_time")[:1]),
-            "has_shift": Exists(assignment_qs),
-        }
+        general_shift_qs = Shift.objects.filter(
+            company=company, name__iexact="General", is_active=True
+        )
 
-    # ── DailyAttendance Annotations ───────────────────────────────────
+        return {
+            "direct_shift_id": Subquery(assignment_qs.values("shift__id")[:1]),
+            "has_direct_shift": Exists(assignment_qs),
+
+            "general_shift_id": Subquery(general_shift_qs.values("id")[:1]),
+            "has_general_shift": Exists(general_shift_qs),
+
+            "shift_id": Case(
+                When(has_direct_shift=True, then=Subquery(assignment_qs.values("shift__id")[:1])),
+                When(has_general_shift=True, then=Subquery(general_shift_qs.values("id")[:1])),
+                default=Value(None),
+                output_field=IntegerField(null=True),
+            ),
+            "shift_name": Case(
+                When(has_direct_shift=True, then=Subquery(assignment_qs.values("shift__name")[:1])),
+                When(has_general_shift=True, then=Value("General")),
+                default=Value("Unassigned Shift"),
+                output_field=CharField(),
+            ),
+            "shift_start": Case(
+                When(has_direct_shift=True, then=Subquery(assignment_qs.values("shift__start_time")[:1])),
+                When(has_general_shift=True, then=Subquery(general_shift_qs.values("start_time")[:1])),
+                default=Value(None),
+                output_field=CharField(null=True),
+            ),
+            "shift_end": Case(
+                When(has_direct_shift=True, then=Subquery(assignment_qs.values("shift__end_time")[:1])),
+                When(has_general_shift=True, then=Subquery(general_shift_qs.values("end_time")[:1])),
+                default=Value(None),
+                output_field=CharField(null=True),
+            ),
+            "has_shift": Case(
+                When(has_direct_shift=True, then=Value(True)),
+                When(has_general_shift=True, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            ),
+            "shift_started": Case(
+                When(shift_start__isnull=False, shift_start__lte=current_time_local, then=Value(True)),
+                default=Value(False),
+                output_field=BooleanField(),
+            ),
+        }
 
     @classmethod
     def annotate_daily_record(cls, *, company: Company, target_date: datetime.date) -> dict:
-        """
-        Pull review flags, late minutes, and record ID from DailyAttendance.
-        This is the ONLY place DailyAttendance is used.
-        """
         daily_qs = DailyAttendance.objects.filter(
-            company=company,
-            membership=OuterRef("pk"),
-            attendance_date=target_date
+            company=company, membership=OuterRef("pk"), attendance_date=target_date
         )
-
         return {
             "da_record_id": Subquery(daily_qs.values("id")[:1]),
             "da_status": Subquery(daily_qs.values("attendance_status")[:1]),
@@ -163,21 +158,14 @@ class HRLiveWorkforceSelector:
             "da_has_record": Exists(daily_qs),
         }
 
-    # ── Leave / Holiday / Weekend Annotations ─────────────────────────
-
     @classmethod
     def annotate_calendar_state(cls, *, company: Company, target_date: datetime.date) -> dict:
-        """
-        Determine if employee is on approved leave, or if today is a company holiday/weekend.
-        """
-        from apps.attendance.models.leave import LeaveRequest  # lazy import to avoid circular deps
+        from apps.attendance.models.leave import LeaveRequest
 
         approved_leave_qs = LeaveRequest.objects.filter(
-            company=company,
-            membership=OuterRef("pk"),
-            status="APPROVED",
-            start_date__lte=target_date,
-            end_date__gte=target_date
+            company=company, membership=OuterRef("pk"),
+            status="approved",
+            start_date__lte=target_date, end_date__gte=target_date
         )
 
         is_holiday = HolidaySelector.is_holiday(company=company, holiday_date=target_date)
@@ -185,114 +173,57 @@ class HRLiveWorkforceSelector:
 
         return {
             "is_on_leave": Exists(approved_leave_qs),
-            "is_holiday_today": Value(is_holiday, output_field=BooleanField()),
-            "is_weekend_today": Value(is_weekend, output_field=BooleanField()),
+            "is_holiday": Value(is_holiday, output_field=BooleanField()),
+            "is_weekend": Value(is_weekend, output_field=BooleanField()),
         }
 
-    # ── Computed Current Status ─────────────────────────────────────────
-
     @classmethod
-    def annotate_current_status(cls) -> dict:
+    def annotate_current_status(cls, *, current_time_local: datetime.time) -> dict:
         """
-        Derive operational status using event-driven logic with calendar overrides.
-        Priority: LEAVE > HOLIDAY > WEEKEND > SHIFT/TIME > EVENTS
+        FIXED: Check leave BEFORE absent. Priority:
+        LEAVE > HOLIDAY > WEEKEND > CHECK_OUT > BREAK > WORKING > NOT_STARTED > ABSENT
         """
         return {
             "computed_status": Case(
                 # Calendar overrides (highest priority)
                 When(is_on_leave=True, then=Value(cls.STATUS_LEAVE)),
-                When(is_holiday_today=True, then=Value(cls.STATUS_HOLIDAY)),
-                When(is_weekend_today=True, then=Value(cls.STATUS_WEEKEND)),
+                When(is_holiday=True, then=Value(cls.STATUS_HOLIDAY)),
+                When(is_weekend=True, then=Value(cls.STATUS_WEEKEND)),
                 # Event-driven status
                 When(evt_last_type=AttendanceEventTypes.CHECK_OUT, then=Value(cls.STATUS_CHECKED_OUT)),
                 When(evt_last_type=AttendanceEventTypes.BREAK_OUT, then=Value(cls.STATUS_BREAK)),
                 When(evt_has_check_in=True, evt_has_check_out=False, then=Value(cls.STATUS_WORKING)),
-                # Shift-based status
+                # Shift-based: if shift hasn't started yet, NOT_STARTED
+                When(has_shift=True, shift_started=False, then=Value(cls.STATUS_NOT_STARTED)),
+                # No shift at all
                 When(has_shift=False, then=Value(cls.STATUS_NOT_STARTED)),
-                # Default: no check-in, has shift → ABSENT (or NOT_STARTED if before shift)
+                # Has shift, shift started, no check-in, not on leave = ABSENT
                 default=Value(cls.STATUS_ABSENT),
-                output_field=CharField(),
-            ),
-            "computed_not_started_reason": Case(
-                When(
-                    has_shift=True, 
-                    shift_start__isnull=False, 
-                    then=Value("before_shift")
-                ),
-                default=Value("no_shift"),
                 output_field=CharField(),
             ),
         }
 
-    # ── Working Duration (Live) ─────────────────────────────────────────
-
     @classmethod
-    def annotate_working_duration(cls, *, current_time: datetime.datetime) -> dict:
-        """
-        Calculate live working duration for WORKING employees.
-        Current Time - First Check In - Break Duration.
-        Stored as minutes for sorting; formatted in serializer.
-        """
-        # For DB-level calculation we'd need complex SQL.
-        # We compute minutes for sorting; serializer does human formatting.
-        # This annotation is a placeholder for DB-computed value;
-        # actual calculation happens in Python loop for accuracy with break pairs.
+    def annotate_working_duration(cls) -> dict:
         return {
             "live_work_minutes": Value(0, output_field=IntegerField()),
         }
 
-    # ── Is Late ─────────────────────────────────────────────────────────
-
-    @classmethod
-    def annotate_is_late(cls) -> dict:
-        """
-        Flag if first check-in occurred after shift start.
-        Uses event time, not DailyAttendance late_minutes (which may be policy-adjusted).
-        """
-        return {
-            "is_late_flag": Case(
-                When(
-                    evt_first_in__isnull=False,
-                    shift_start__isnull=False,
-                    then=Value(True),  # Actual comparison done in Python for time-only fields
-                ),
-                default=Value(False),
-                output_field=BooleanField(),
-            ),
-        }
-
-    # ── Master Assembly ───────────────────────────────────────────────────
-
     @classmethod
     def get_live_workforce_queryset(
-        cls,
-        *,
-        company: Company,
-        target_date: datetime.date,
-        current_time: datetime.datetime,
+        cls, *, company: Company, target_date: datetime.date, current_time_local: datetime.time
     ) -> QuerySet[Membership]:
-        """
-        Assemble the fully annotated, optimized queryset for Live Workforce.
-        Single query with all annotations applied.
-        """
         queryset = cls.get_base_queryset(company=company)
-
-        # Apply all annotation layers
         queryset = queryset.annotate(**cls.annotate_live_events(company=company, target_date=target_date))
-        queryset = queryset.annotate(**cls.annotate_shift(target_date=target_date))
+        queryset = queryset.annotate(**cls.annotate_shift(company=company, target_date=target_date, current_time_local=current_time_local))
         queryset = queryset.annotate(**cls.annotate_daily_record(company=company, target_date=target_date))
         queryset = queryset.annotate(**cls.annotate_calendar_state(company=company, target_date=target_date))
-        queryset = queryset.annotate(**cls.annotate_current_status())
-        queryset = queryset.annotate(**cls.annotate_working_duration(current_time=current_time))
-        queryset = queryset.annotate(**cls.annotate_is_late())
-
+        queryset = queryset.annotate(**cls.annotate_current_status(current_time_local=current_time_local))
+        queryset = queryset.annotate(**cls.annotate_working_duration())
         return queryset
-
-    # ── Filter Application ──────────────────────────────────────────────
 
     @classmethod
     def apply_status_filter(cls, queryset: QuerySet, status: str) -> QuerySet:
-        """Filter by computed operational status."""
         if status == cls.STATUS_REVIEW_REQUIRED:
             return queryset.filter(da_needs_review=True)
         return queryset.filter(computed_status=status)
@@ -307,7 +238,6 @@ class HRLiveWorkforceSelector:
 
     @classmethod
     def apply_search_filter(cls, queryset: QuerySet, search_query: str) -> QuerySet:
-        """Multi-field search across employee identity fields."""
         return queryset.filter(
             Q(user__first_name__icontains=search_query) |
             Q(user__last_name__icontains=search_query) |
@@ -325,13 +255,8 @@ class HRLiveWorkforceSelector:
 
     @classmethod
     def apply_missing_checkout_filter(cls, queryset: QuerySet) -> QuerySet:
-        """
-        Checked in, no checkout, and current time is past shift end.
-        """
         return queryset.filter(
-            evt_has_check_in=True,
-            evt_has_check_out=False,
-            da_auto_closed=False,
+            evt_has_check_in=True, evt_has_check_out=False, da_auto_closed=False,
         )
 
     @classmethod
@@ -340,12 +265,7 @@ class HRLiveWorkforceSelector:
 
     @classmethod
     def apply_work_mode_filter(cls, queryset: QuerySet, work_mode: str) -> QuerySet:
-        # work_mode maps to shift-based or assignment-based filtering
-        # Implementation depends on your work_mode model field
-        # Placeholder: filter by shift name containing work_mode
-        return queryset.filter(shift_name__icontains=work_mode)
-
-    # ── Ordering ────────────────────────────────────────────────────────
+        return queryset.filter(work_mode=work_mode)
 
     ALLOWED_ORDERING = {
         "employee_name": "user__first_name",
@@ -371,13 +291,8 @@ class HRLiveWorkforceSelector:
         db_field = cls.ALLOWED_ORDERING.get(ordering, "user__first_name")
         return queryset.order_by(db_field)
 
-    # ── Summary Aggregation ─────────────────────────────────────────────
-
     @classmethod
     def get_summary(cls, queryset: QuerySet) -> dict:
-        """
-        Count employees by computed status from the filtered queryset.
-        """
         agg = queryset.aggregate(
             total=Count("id"),
             working=Count("id", filter=Q(computed_status=cls.STATUS_WORKING)),
@@ -390,7 +305,6 @@ class HRLiveWorkforceSelector:
             weekend=Count("id", filter=Q(computed_status=cls.STATUS_WEEKEND)),
             review_required=Count("id", filter=Q(da_needs_review=True)),
         )
-
         return {
             "total": agg["total"] or 0,
             "working": agg["working"] or 0,
@@ -404,30 +318,16 @@ class HRLiveWorkforceSelector:
             "review_required": agg["review_required"] or 0,
         }
 
-    # ── Filter Metadata ─────────────────────────────────────────────────
-
     @classmethod
     def get_filter_metadata(cls, *, company: Company, target_date: datetime.date) -> dict:
-        """
-        Return dropdown options for frontend filters.
-        """
         departments = list(
             Membership.objects.filter(company=company, is_active=True)
             .values_list("department__id", "department__name")
-            .distinct()
-            .exclude(department__isnull=True)
+            .distinct().exclude(department__isnull=True)
         )
-
-        shifts = list(
-            Shift.objects.filter(company=company, is_active=True)
-            .values("id", "name")
-        )
-
+        shifts = list(Shift.objects.filter(company=company, is_active=True).values("id", "name"))
         return {
-            "departments": [
-                {"id": dept_id, "name": dept_name or "Unassigned"}
-                for dept_id, dept_name in departments
-            ],
+            "departments": [{"id": did, "name": dname or "Unassigned"} for did, dname in departments],
             "shifts": shifts,
             "available_statuses": [
                 {"value": cls.STATUS_WORKING, "label": "Working"},

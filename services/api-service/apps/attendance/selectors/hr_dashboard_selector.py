@@ -1,7 +1,10 @@
 # apps/attendance/selectors/hr_dashboard_selector.py
 
 from django.utils import timezone
-from django.db.models import QuerySet, Q, Count, OuterRef, Subquery, Exists, F
+from django.db.models import (
+    QuerySet, Q, Count, OuterRef, Subquery, Exists, F,
+    Case, When, Value, CharField, IntegerField, BooleanField, TimeField
+)
 from django.conf import settings
 import datetime
 
@@ -20,18 +23,11 @@ class HRDashboardSelector:
 
     @classmethod
     def _get_date_range_in_utc(cls, target_date: datetime.date, tz_name: str = None) -> tuple:
-        """
-        Convert a local date to UTC datetime range for accurate DB filtering.
-        Fixes: event_time__date mismatch when local date != UTC date.
-        """
         tz = timezone.get_default_timezone() if not tz_name else timezone.pytz.timezone(tz_name)
-        
         start_local = datetime.datetime.combine(target_date, datetime.time.min)
         end_local = datetime.datetime.combine(target_date, datetime.time.max)
-        
         start_aware = timezone.make_aware(start_local, tz)
         end_aware = timezone.make_aware(end_local, tz)
-        
         return (
             start_aware.astimezone(timezone.utc),
             end_aware.astimezone(timezone.utc)
@@ -43,15 +39,15 @@ class HRDashboardSelector:
 
     @classmethod
     def compile_live_state_annotations(cls, *, company: Company, target_date: datetime.date) -> dict:
-        # FIXED: Use UTC datetime range instead of __date for timezone-safe filtering
         start_utc, end_utc = cls._get_date_range_in_utc(target_date)
 
         last_event_subquery = AttendanceEvent.objects.filter(
             company=company,
             membership=OuterRef("pk"),
-            event_time__range=(start_utc, end_utc)  # FIXED: was event_time__date=target_date
+            event_time__range=(start_utc, end_utc)
         ).order_by("-event_time")
 
+        # Direct assignment query
         assignment_subquery = EmployeeShiftAssignment.objects.filter(
             membership=OuterRef("pk"),
             is_active=True,
@@ -60,19 +56,64 @@ class HRDashboardSelector:
             Q(effective_until__isnull=True) | Q(effective_until__gte=target_date)
         ).order_by("-effective_from")
 
+        # General shift fallback query
+        general_shift_qs = Shift.objects.filter(
+            company=company, name__iexact="General", is_active=True
+        )
+
         first_check_in_subquery = AttendanceEvent.objects.filter(
             company=company,
             membership=OuterRef("pk"),
-            event_time__range=(start_utc, end_utc),  # FIXED
+            event_time__range=(start_utc, end_utc),
             event_type=AttendanceEventTypes.CHECK_IN
         ).order_by("event_time").values("event_time")
 
+        # Approved leave check
+        from apps.attendance.models.leave import LeaveRequest
+        approved_leave_qs = LeaveRequest.objects.filter(
+            company=company,
+            membership=OuterRef("pk"),
+            status="approved",
+            start_date__lte=target_date,
+            end_date__gte=target_date
+        )
+
+        # FIXED: shift_start_annotation must include General fallback
+        # Use Case/When to pick direct assignment first, then General fallback
         return {
-            "has_shift": Exists(assignment_subquery),
+            "has_direct_shift": Exists(assignment_subquery),
             "active_shift_id": Subquery(assignment_subquery.values("shift__id")[:1]),
             "shift_name_annotation": Subquery(assignment_subquery.values("shift__name")[:1]),
-            "shift_start_annotation": Subquery(assignment_subquery.values("shift__start_time")[:1]),
-            "shift_end_annotation": Subquery(assignment_subquery.values("shift__end_time")[:1]),
+            
+            # FIXED: shift_start_annotation now falls back to General shift
+            "shift_start_annotation": Case(
+                When(
+                    Exists(assignment_subquery),
+                    then=Subquery(assignment_subquery.values("shift__start_time")[:1])
+                ),
+                When(
+                    Exists(general_shift_qs),
+                    then=Subquery(general_shift_qs.values("start_time")[:1])
+                ),
+                default=Value(None),
+                output_field=TimeField(null=True),
+            ),
+            # FIXED: shift_end_annotation also needs fallback
+            "shift_end_annotation": Case(
+                When(
+                    Exists(assignment_subquery),
+                    then=Subquery(assignment_subquery.values("shift__end_time")[:1])
+                ),
+                When(
+                    Exists(general_shift_qs),
+                    then=Subquery(general_shift_qs.values("end_time")[:1])
+                ),
+                default=Value(None),
+                output_field=TimeField(null=True),
+            ),
+
+            "has_general_shift": Exists(general_shift_qs),
+            "has_shift": Exists(assignment_subquery) | Exists(general_shift_qs),
 
             "last_event_type": Subquery(last_event_subquery.values("event_type")[:1]),
             "last_event_time": Subquery(last_event_subquery.values("event_time")[:1]),
@@ -82,15 +123,16 @@ class HRDashboardSelector:
             "has_check_in": Exists(AttendanceEvent.objects.filter(
                 company=company,
                 membership=OuterRef("pk"),
-                event_time__range=(start_utc, end_utc),  # FIXED
+                event_time__range=(start_utc, end_utc),
                 event_type=AttendanceEventTypes.CHECK_IN
             )),
             "has_check_out": Exists(AttendanceEvent.objects.filter(
                 company=company,
                 membership=OuterRef("pk"),
-                event_time__range=(start_utc, end_utc),  # FIXED
+                event_time__range=(start_utc, end_utc),
                 event_type=AttendanceEventTypes.CHECK_OUT
             )),
+            "is_on_leave": Exists(approved_leave_qs),
         }
 
     @classmethod
@@ -105,7 +147,15 @@ class HRDashboardSelector:
             currently_working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
             on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
             checked_out=Count("id", filter=Q(has_check_out=True)),
-            absent_until_now=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local))
+            on_leave=Count("id", filter=Q(is_on_leave=True)),
+            # FIXED: ABSENT now works because shift_start_annotation includes General fallback
+            absent_until_now=Count("id", filter=Q(
+                has_shift=True,
+                has_check_in=False,
+                is_on_leave=False,
+                shift_start_annotation__isnull=False,
+                shift_start_annotation__lt=current_time_local
+            ))
         )
 
         total = aggregation["scheduled_today"] or 1
@@ -122,6 +172,7 @@ class HRDashboardSelector:
             "currently_working": aggregation["currently_working"] or 0,
             "on_break": aggregation["on_break"] or 0,
             "checked_out": aggregation["checked_out"] or 0,
+            "on_leave": aggregation["on_leave"] or 0,
             "absent_until_now": aggregation["absent_until_now"] or 0,
             "attendance_percentage": attendance_pct,
             "is_holiday": is_today_holiday,
@@ -139,8 +190,18 @@ class HRDashboardSelector:
             working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
             on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
             checked_out=Count("id", filter=Q(has_check_out=True)),
-            absent=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local)),
-            not_started=Count("id", filter=Q(has_shift=True, has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__gte=current_time_local))
+            on_leave=Count("id", filter=Q(is_on_leave=True)),
+            # FIXED: ABSENT now works because shift_start_annotation includes General fallback
+            absent=Count("id", filter=Q(
+                has_shift=True, has_check_in=False, is_on_leave=False,
+                shift_start_annotation__isnull=False,
+                shift_start_annotation__lt=current_time_local
+            )),
+            not_started=Count("id", filter=Q(
+                has_shift=True, has_check_in=False, is_on_leave=False,
+                shift_start_annotation__isnull=False,
+                shift_start_annotation__gte=current_time_local
+            ))
         )
 
         return [
@@ -151,7 +212,7 @@ class HRDashboardSelector:
                 "working_count": item["working"],
                 "break_count": item["on_break"],
                 "checked_out_count": item["checked_out"],
-                "leave_count": 0,
+                "leave_count": item["on_leave"],
                 "absent_count": item["absent"],
                 "not_started_count": item["not_started"],
                 "attendance_percentage": round(((item["employees"] - item["absent"]) / (item["employees"] or 1)) * 100, 2)
@@ -169,7 +230,10 @@ class HRDashboardSelector:
         shift_summary_list = []
         for shift in company_shifts:
             if general_shift and shift.id == general_shift.id:
-                shift_pool = memberships_today.filter(Q(active_shift_id=shift.id) | Q(active_shift_id__isnull=True))
+                shift_pool = memberships_today.filter(
+                    Q(active_shift_id=shift.id) | 
+                    Q(active_shift_id__isnull=True, has_general_shift=True)
+                )
             else:
                 shift_pool = memberships_today.filter(active_shift_id=shift.id)
 
@@ -178,16 +242,19 @@ class HRDashboardSelector:
                 working=Count("id", filter=Q(has_check_in=True, has_check_out=False) & ~Q(last_event_type=AttendanceEventTypes.BREAK_OUT)),
                 on_break=Count("id", filter=Q(has_check_in=True, last_event_type=AttendanceEventTypes.BREAK_OUT)),
                 checked_out=Count("id", filter=Q(has_check_out=True)),
-                absent=Count("id", filter=Q(has_check_in=False, shift_start_annotation__isnull=False, shift_start_annotation__lt=current_time_local)),
+                on_leave=Count("id", filter=Q(is_on_leave=True)),
+                absent=Count("id", filter=Q(
+                    has_check_in=False, is_on_leave=False,
+                    shift_start_annotation__isnull=False,
+                    shift_start_annotation__lt=current_time_local
+                )),
                 late=Count("id", filter=Q(has_check_in=True, first_in_time__time__gt=shift.start_time))
             )
 
-            absent_count = metrics["absent"]
-            if general_shift and shift.id == general_shift.id:
-                unassigned_pool = memberships_today.filter(active_shift_id__isnull=True, has_check_in=False)
-                for mem in unassigned_pool:
-                    if shift.start_time < current_time_local:
-                        absent_count += 1
+            # FIXED: Removed double-counting Python loop. 
+            # The aggregation above already counts all employees in shift_pool correctly
+            # because shift_start_annotation now includes General fallback.
+            absent_count = metrics["absent"] or 0
 
             shift_summary_list.append({
                 "shift_id": shift.id,
@@ -196,6 +263,7 @@ class HRDashboardSelector:
                 "working_count": metrics["working"] or 0,
                 "break_count": metrics["on_break"] or 0,
                 "checked_out_count": metrics["checked_out"] or 0,
+                "leave_count": metrics["on_leave"] or 0,
                 "absent_count": absent_count,
                 "late_count": metrics["late"] or 0
             })
@@ -211,10 +279,11 @@ class HRDashboardSelector:
 
         result = []
         for mem in pool:
-            # FIXED: Status logic now checks last_event_type first for correct precedence
             status_str = "NOT_STARTED"
             
-            if mem.last_event_type == AttendanceEventTypes.CHECK_OUT:
+            if mem.is_on_leave:
+                status_str = "LEAVE"
+            elif mem.last_event_type == AttendanceEventTypes.CHECK_OUT:
                 status_str = "CHECKED_OUT"
             elif mem.last_event_type == AttendanceEventTypes.BREAK_OUT:
                 status_str = "BREAK"
@@ -243,12 +312,11 @@ class HRDashboardSelector:
 
     @classmethod
     def get_activity_feed(cls, *, company: Company, target_date: datetime.date) -> QuerySet[AttendanceEvent]:
-        # FIXED: Also use UTC range here for consistency
         start_utc, end_utc = cls._get_date_range_in_utc(target_date)
         
         return AttendanceEvent.objects.filter(
             company=company,
-            event_time__range=(start_utc, end_utc)  # FIXED: was event_time__date=target_date
+            event_time__range=(start_utc, end_utc)
         ).select_related(
             "membership",
             "membership__user",
