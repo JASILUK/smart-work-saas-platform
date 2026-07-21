@@ -30,5 +30,7 @@ urlpatterns = [
     path("api/meetings/v1/", include("apps.meetings.api.v1.urls")),
     path("api/calendars/v1/",include("apps.calendars.api.v1.urls"),),
     path("api/attendance/v1/", include("apps.attendance.api.v1.urls")),
+    path("api/projects/v1/", include("apps.projects.api.v1.urls")),
+
 
 ]

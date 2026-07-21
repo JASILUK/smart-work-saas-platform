@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
-    # 1. Let DRF handle standard API errors
+
+
     response = exception_handler(exc, context)
     if response is not None:
         return response

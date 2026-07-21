@@ -1,10 +1,14 @@
 # apps/attendance/selectors/hr_record_detail_selector.py
 from typing import Optional, Tuple, List
-from django.db.models import QuerySet
+import datetime
 from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance
 from apps.attendance.models.attendance_event import AttendanceEvent
 from apps.attendance.models.employee_attendance_override import EmployeeAttendanceOverride
+
+# Import your shift-aware event selector
+from apps.attendance.selectors.attendance_event_selector import AttendanceEventSelector
+
 
 class HRRecordDetailSelector:
     """
@@ -32,12 +36,12 @@ class HRRecordDetailSelector:
         if not record:
             return None
 
-        # 2. Fetch the corresponding event history using composite indexes
+        # 2. ✅ FIXED: Delegate event extraction to your schedule-aware AttendanceEventSelector
+        # This automatically resolves night-shift boundaries using the employee's rules.
         events = list(
-            AttendanceEvent.objects.filter(
-                company=company,
+            AttendanceEventSelector.get_events_for_membership_and_date(
                 membership=record.membership,
-                event_time__date=record.attendance_date
+                date=record.attendance_date
             ).select_related(
                 "location", 
                 "created_by__user"
@@ -45,14 +49,12 @@ class HRRecordDetailSelector:
         )
 
         # 3. Fetch matching administrative adjustments using employee membership targets
-        # FIXED: Swapped 'daily_attendance=record' for 'membership=record.membership' to resolve FieldError
         audit_history = list(
             EmployeeAttendanceOverride.objects.filter(
                 company=company,
                 membership=record.membership
             ).select_related(
                 "override_by__user" if hasattr(EmployeeAttendanceOverride, "override_by") else "company"
-                # Fallback safeguard in case your serializer handles relational user joins directly via context
             ).order_by("-created_at")
         )
 

@@ -14,6 +14,8 @@ from apps.attendance.api.v1.views.attendance_event_views import (
 from apps.attendance.api.v1.views.attendance_location_views import (
     ActivateAttendanceLocationAPI, AttendanceLocationDetailAPI, AttendanceLocationListCreateAPI
 )
+from apps.attendance.api.v1.views.attendance_report_export_views import AttendanceReportExportAPIView
+from apps.attendance.api.v1.views.attendance_report_views import AttendanceReportAPIView
 from apps.attendance.api.v1.views.biometric_log_views import (
     BiometricLogDetailAPI, BiometricLogListAPI, ManualImportAPI, PushWebhookAPI
 )
@@ -46,6 +48,7 @@ from apps.attendance.api.v1.views.holiday_views import (
 
 # ─── 3. Employee History Module Views
 from apps.attendance.api.v1.views.hr_action_workflow_views import HRClearReviewAPIView, HRFinalizeRecordAPIView, HRManualBreakEndAPIView, HRManualBreakStartAPIView, HRManualCheckInAPIView, HRManualCheckOutAPIView, HRMarkNeedsReviewAPIView, HROverrideStatusAPIView, HRReprocessTimelineAPIView, HRUnlockRecordAPIView
+from apps.attendance.api.v1.views.hr_correction_views import HRAttendanceEventCorrectionAPIView
 from apps.attendance.api.v1.views.hr_directory_views import HREmployeeAttendanceDirectoryAPIView
 from apps.attendance.api.v1.views.hr_live_workforce_views import HRLiveWorkforceAPIView
 from apps.attendance.api.v1.views.hr_profile_views import HREmployeeAttendanceProfileAPIView
@@ -94,11 +97,6 @@ from apps.attendance.api.v1.views.hr_review_views import (
      HRReviewResolveAPIView, HRReviewNoteAPIView
 )
 
-from apps.attendance.api.v1.views.hr_report_views import (
-    HRCompanyReportSummaryAPIView, HRPayrollAttendanceDatasetAPIView, 
-    HRReportAnalyticsAPIView, HRReportExportTriggerAPIView, 
-    HRReportAutomationSchedulingAPIView, HRReportGenerationHistoryAPIView
-)
 
 
 app_name = "attendance"
@@ -257,12 +255,14 @@ urlpatterns = [
     # =====================================================
     # ADVANCED HR ATTENDANCE OPERATION SYSTEM MIGRATIONS (NEW)
     # =====================================================
-   path("hr-management/dashboard-summary/", HRDashboardSummaryAPIView.as_view(), name="hr-dashboard-summary"),
+    path("hr-management/dashboard-summary/", HRDashboardSummaryAPIView.as_view(), name="hr-dashboard-summary"),
     path("hr-management/company-ledger/", HRCompanyLedgerAPIView.as_view(), name="hr-company-ledger"),
     
     path("hr-management/records/<int:record_id>/", HRAttendanceRecordDetailAPIView.as_view(), name="hr-record-detail"),
+    # Injected Event Correction Workflow Router Pattern Node
+    path("hr-management/events/correction/", HRAttendanceEventCorrectionAPIView.as_view(), name="hr-event-correction"),
 
-   path("hr-management/records/<int:record_id>/actions/check-in/", HRManualCheckInAPIView.as_view(), name="hr-action-check-in"),
+    path("hr-management/records/<int:record_id>/actions/check-in/", HRManualCheckInAPIView.as_view(), name="hr-action-check-in"),
     path("hr-management/records/<int:record_id>/actions/check-out/", HRManualCheckOutAPIView.as_view(), name="hr-action-check-out"),
     path("hr-management/records/<int:record_id>/actions/break-start/", HRManualBreakStartAPIView.as_view(), name="hr-action-break-start"),
     path("hr-management/records/<int:record_id>/actions/break-end/", HRManualBreakEndAPIView.as_view(), name="hr-action-break-end"),
@@ -309,12 +309,14 @@ urlpatterns = [
     path("hr/reviews/<int:record_id>/resolve/", HRReviewResolveAPIView.as_view(), name="hr-review-resolve"),
     path("hr/reviews/<int:record_id>/note/", HRReviewNoteAPIView.as_view(), name="hr-review-note"),
 
-    path("hr/reports/company/", HRCompanyReportSummaryAPIView.as_view(), name="hr-report-company-summary"),
-    path("hr/reports/payroll/", HRPayrollAttendanceDatasetAPIView.as_view(), name="hr-report-payroll-ledger"),
-    path("hr/reports/analytics/", HRReportAnalyticsAPIView.as_view(), name="hr-report-analytics-trends"),
+    path("hr/reports/export/", AttendanceReportExportAPIView.as_view(), name="hr-report-export-trigger"),
+    path("hr/reports/", AttendanceReportAPIView.as_view(), name="hr-report-company-summary"),
+
+
+    # path("hr/reports/payroll/", HRPayrollAttendanceDatasetAPIView.as_view(), name="hr-report-payroll-ledger"),
+    # path("hr/reports/analytics/", HRReportAnalyticsAPIView.as_view(), name="hr-report-analytics-trends"),
     
-    path("hr/reports/export/", HRReportExportTriggerAPIView.as_view(), name="hr-report-export-trigger"),
-    path("hr/reports/history/", HRReportGenerationHistoryAPIView.as_view(), name="hr-report-export-history"),
-    path("hr/reports/schedule/", HRReportAutomationSchedulingAPIView.as_view(), name="hr-report-schedule-rule"),
+    # path("hr/reports/history/", HRReportGenerationHistoryAPIView.as_view(), name="hr-report-export-history"),
+    # path("hr/reports/schedule/", HRReportAutomationSchedulingAPIView.as_view(), name="hr-report-schedule-rule"),
 
     ]

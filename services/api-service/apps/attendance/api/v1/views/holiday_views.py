@@ -1,23 +1,24 @@
-from apps.core.standers_pagination import StandardLimitOffsetPagination
-from rest_framework.request import Request
 from django.utils.timezone import localdate
+from rest_framework.request import Request
 
-from apps.attendance.selectors.holiday_selector import HolidaySelector
-from apps.attendance.services.holiday_service import HolidayService
-from apps.attendance.services.holiday_import_service import HolidayImportService
 from apps.attendance.api.v1.serializers.holiday_serializers import (
     HolidayCreateSerializer,
-    HolidayUpdateSerializer,
     HolidayDetailSerializer,
-    HolidayListSerializer,
     HolidayImportRequestSerializer,
-    HolidayPreviewRequestSerializer,
     HolidayImportSummarySerializer,
+    HolidayListSerializer,
+    HolidayPreviewRequestSerializer,
+    HolidayUpdateSerializer,
 )
+from apps.attendance.selectors.holiday_selector import HolidaySelector
+from apps.attendance.services.holiday_import_service import HolidayImportService
+from apps.attendance.services.holiday_service import HolidayService
 from apps.companies.api.base import BaseCompanyAPIView
 from apps.core.api_response import ApiResponse
-
-
+from apps.core.standers_pagination import (
+    StandardLimitOffsetPagination,
+    PaginationAdapter,
+)
 
 
 class HolidayListCreateAPI(BaseCompanyAPIView):
@@ -27,40 +28,54 @@ class HolidayListCreateAPI(BaseCompanyAPIView):
     }
 
     def get(self, request: Request):
-        # 1. Fetch the base query from the selector
-        base_queryset = HolidaySelector.get_company_holidays(company=request.company)
+        # Base queryset
+        queryset = HolidaySelector.get_company_holidays(
+            company=request.company
+        )
 
-        # 2. Apply query parameter filtering
+        # Filters
         holiday_type = request.query_params.get("holiday_type")
         year = request.query_params.get("year", localdate().year)
         month = request.query_params.get("month")
         upcoming = request.query_params.get("upcoming")
 
         if holiday_type:
-            base_queryset = base_queryset.filter(holiday_type=holiday_type)
+            queryset = queryset.filter(holiday_type=holiday_type)
+
         if year:
-            base_queryset = base_queryset.filter(holiday_date__year=year)
+            queryset = queryset.filter(holiday_date__year=year)
+
         if month:
-            base_queryset = base_queryset.filter(holiday_date__month=month)
+            queryset = queryset.filter(holiday_date__month=month)
+
         if upcoming and str(upcoming).lower() == "true":
-            base_queryset = base_queryset.filter(holiday_date__gte=localdate())
+            queryset = queryset.filter(
+                holiday_date__gte=localdate()
+            )
 
-        # 3. Call the selector to calculate the metrics before slicing for pagination
-        metrics = HolidaySelector.get_holiday_metrics(base_queryset)
+        # Metrics before pagination
+        metrics = HolidaySelector.get_holiday_metrics(queryset)
 
-        # 4. Paginate the dataset
+        # Pagination
         paginator = StandardLimitOffsetPagination()
-        paginated_queryset = paginator.paginate_queryset(base_queryset, request, view=self)
+        page = paginator.paginate_queryset(
+            queryset,
+            request,
+            view=self,
+        )
 
-        serializer = HolidayListSerializer(paginated_queryset, many=True)
+        serializer = HolidayListSerializer(page, many=True)
+
+        pagination_meta = PaginationAdapter.get_metadata(
+            paginator,
+            page,
+        )
 
         return ApiResponse.success(
             data={
                 "meta": {
-                    "count": paginator.page.paginator.count,
-                    "next": paginator.get_next_link(),
-                    "previous": paginator.get_previous_link(),
-                    "metrics": metrics, # Clean dictionary containing total, paid, half_day, upcoming
+                    **pagination_meta,
+                    "metrics": metrics,
                 },
                 "results": serializer.data,
             }

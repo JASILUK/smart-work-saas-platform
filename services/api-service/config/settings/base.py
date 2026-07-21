@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "apps.meetings",
     "apps.reminders",
     "apps.attendance",
+    "apps.projects"
 
 ]
 

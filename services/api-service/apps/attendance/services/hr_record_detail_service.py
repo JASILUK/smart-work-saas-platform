@@ -1,9 +1,11 @@
 # apps/attendance/services/hr_record_detail_service.py
+import datetime
 from typing import Optional
 
 from apps.companies.models import Company
 from apps.attendance.models.daily_attendance import DailyAttendance
 from apps.attendance.selectors.hr_record_detail_selector import HRRecordDetailSelector
+
 
 class HRRecordDetailService:
     """
@@ -51,3 +53,26 @@ class HRRecordDetailService:
             "audit_history": audit_history,
             "allowed_actions": allowed_actions
         }
+
+    @classmethod
+    def compile_detailed_record_packet_by_date(
+        cls, 
+        *, 
+        company: Company, 
+        membership_id: int, 
+        target_date: datetime.date
+    ) -> Optional[dict]:
+        """
+        Locates a daily summary record token by worker profile and target date context, 
+        then routes it to compile the complete timeline packet.
+        """
+        record = DailyAttendance.objects.filter(
+            company=company,
+            membership_id=membership_id,
+            attendance_date=target_date
+        ).first()
+
+        if not record:
+            return None
+
+        return cls.compile_detailed_record_packet(company=company, record_id=record.id)

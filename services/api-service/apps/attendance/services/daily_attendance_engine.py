@@ -1,3 +1,11 @@
+# apps/attendance/services/daily_attendance_engine.py
+"""
+Daily Attendance Processing Engine Hub
+
+The processing hub of the multi-tenant tracking framework.
+Translates raw streaming punch sequences into immutable daily evaluation records.
+"""
+
 import datetime
 import django.utils.timezone as timezone
 from typing import Any, Dict, List, Optional
@@ -9,6 +17,7 @@ from apps.companies.models import Company, Membership
 from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus, DailyAttendanceInflowSource
 from apps.attendance.models.attendance_event import AttendanceEvent, AttendanceEventTypes
 from apps.attendance.selectors.daily_attendance_selector import DailyAttendanceSelector
+from apps.attendance.selectors.attendance_event_selector import AttendanceEventSelector
 
 
 class DailyAttendanceEngine:
@@ -23,18 +32,30 @@ class DailyAttendanceEngine:
         """
         Processes timeline analytics for a specific employee date segment.
         """
-        # Purge pre-existing unfinalized calculations records to ensure execution idempotency safely
-        existing_record = DailyAttendanceSelector.get_for_employee_date(company=company, membership=membership, target_date=target_date)
-        if existing_record and existing_record.finalized_at:
+        # Fetch pre-existing calculations record for the target day context
+        record = DailyAttendanceSelector.get_record_for_membership_and_date(
+            membership=membership, 
+            date=target_date
+        )
+        
+        # Enforce boundary checks to protect locked data layers
+        if record and record.finalized_at:
             raise DjangoValidationError(_("Cannot modify metrics parameters. Payroll boundaries for this daily record are finalized."))
 
-        if existing_record:
-            existing_record.delete()
+        # ✅ FIXED: Initialize instance if it does not exist instead of running a delete cycle.
+        # This preserves the original database ID row token across recalculations.
+        if not record:
+            record = DailyAttendance(
+                company=company, 
+                membership=membership, 
+                attendance_date=target_date
+            )
 
-        # Step 1: Extract transaction stream data logs
-        events = list(AttendanceEvent.objects.filter(
-            company=company, membership=membership, event_time__date=target_date
-        ).order_by("event_time"))
+        # Step 1: Extract transaction stream data logs via the timezone-aware selector
+        events = list(AttendanceEventSelector.get_events_for_membership_and_date(
+            membership=membership,
+            date=target_date
+        ))
 
         # Step 2: Initialize organizational baseline snapshots config models
         schedule = cls._mock_resolve_schedule(company, membership, target_date)
@@ -45,12 +66,13 @@ class DailyAttendanceEngine:
         is_holiday = cls._mock_eval_holiday(company, target_date)
         is_leave = cls._mock_eval_leave(membership, target_date)
 
-        record = DailyAttendance(
-            company=company, membership=membership, attendance_date=target_date,
-            schedule_snapshot=schedule, policy_snapshot=policy,
-            is_weekend=is_weekend, is_holiday=is_holiday, is_leave=is_leave,
-            required_work_minutes=policy["required_work_minutes"]
-        )
+        # Update core snapshot attributes inline
+        record.schedule_snapshot = schedule
+        record.policy_snapshot = policy
+        record.is_weekend = is_weekend
+        record.is_holiday = is_holiday
+        record.is_leave = is_leave
+        record.required_work_minutes = policy["required_work_minutes"]
 
         # Approved leaves, holidays, and weekends are NOT structural anomalies.
         if is_leave:
@@ -230,7 +252,10 @@ class DailyAttendanceEngine:
     @classmethod
     @transaction.atomic
     def reprocess_attendance(cls, *, company: Company, membership: Membership, target_date: datetime.date, actor: Membership) -> DailyAttendance:
-        record = DailyAttendanceSelector.get_for_employee_date(company=company, membership=membership, target_date=target_date)
+        record = DailyAttendanceSelector.get_record_for_membership_and_date(
+            membership=membership, 
+            date=target_date
+        )
         if record and record.finalized_at:
             record.finalized_at = None
             record.save(update_fields=["finalized_at"])

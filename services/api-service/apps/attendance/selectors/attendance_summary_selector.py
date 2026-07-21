@@ -17,7 +17,7 @@ from django.db.models import Q, Count, Avg, Sum, F, Value, Func
 from django.db.models.functions import Coalesce
 
 from apps.companies.models import Company
-from apps.attendance.models.daily_attendance import DailyAttendance
+from apps.attendance.models.daily_attendance import DailyAttendance, DailyAttendanceStatus
 
 
 # ------------------------------------------------------------------------------
@@ -68,14 +68,15 @@ class AttendanceSummarySelector:
         # Single-query aggregation for all counters and durations
         aggregations = base_qs.aggregate(
             calendar_days=Count("id"),
-            present_days=Count("id", filter=Q(is_present=True)),
-            absent_days=Count("id", filter=Q(is_absent=True)),
-            half_days=Count("id", filter=Q(is_half_day=True)),
+            present_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.PRESENT)),
+            absent_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.ABSENT)),
+            half_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.HALF_DAY)),
+            leave_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.LEAVE)),
+            holiday_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.HOLIDAY)),
+            weekend_days=Count("id", filter=Q(attendance_status=DailyAttendanceStatus.WEEKEND)),
+            # Operational exception flags remain based on boolean fields
             late_days=Count("id", filter=Q(is_late=True)),
             early_exit_days=Count("id", filter=Q(is_early_exit=True)),
-            leave_days=Count("id", filter=Q(is_leave=True)),
-            holiday_days=Count("id", filter=Q(is_holiday=True)),
-            weekend_days=Count("id", filter=Q(is_weekend=True)),
             needs_review_count=Count("id", filter=Q(needs_review=True)),
             missing_checkout_count=Count(
                 "id",

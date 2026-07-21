@@ -30,11 +30,10 @@ twilio==8.2.2
 pyotp==2.9.0
 qrcode==7.4.2
 
-
 # RTC / LiveKit
 livekit-api==0.8.2
 
-# 🔥 Cloudinary (Media)
+# Cloudinary (Media)
 cloudinary==1.37.0
 requests>=2.31.0
 urllib3>=2.0.0
@@ -46,9 +45,15 @@ isort==5.13.2
 django-debug-toolbar==4.3.0
 django-extensions==3.2.3
 
+# Firebase
 firebase-admin==6.5.0
 
-
-
+# Data / ML
 numpy==1.26.4
 scipy==1.12.0
+
+# ────────────────────────────────────────────────
+# Attendance Report Export Dependencies
+# ────────────────────────────────────────────────
+openpyxl==3.1.2      # Excel (.xlsx) generation
+reportlab==4.0.9     # PDF generation
