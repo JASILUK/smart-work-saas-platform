@@ -14,6 +14,7 @@ from django.db.models.functions import Coalesce
 
 from apps.projects.models.projects import Project
 from apps.projects.models.project_members import ProjectMember
+from apps.projects.selectors.project_member_selector import ProjectMemberSelector
 
 
 class ProjectSelector:
@@ -351,6 +352,34 @@ class ProjectSelector:
     # ------------------------------------------------------------------
     # Summary Builders & Extension Points
     # ------------------------------------------------------------------
+
+    @classmethod
+    def get_my_membership_summary(
+        cls,
+        project: Project,
+        membership,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Return a summary of the current user's membership in the given project.
+
+        Reuses ProjectMemberSelector to avoid duplicate queries.
+        Returns None if the user is not a member of the project.
+        """
+        member = ProjectMemberSelector.get_project_member(
+            project_id=project.id,
+            membership_id=membership.id,
+        )
+
+        if member is None:
+            return None
+
+        return {
+            "membership_id": member.membership_id,
+            "role": member.role,
+            "is_owner": member.is_owner,
+            "is_manager": member.is_manager,
+            "can_manage_members": member.can_manage_members,
+        }
 
     @classmethod
     def get_member_summary(cls, project: Project) -> Dict[str, int]:

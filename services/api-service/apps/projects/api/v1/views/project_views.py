@@ -150,7 +150,12 @@ class ProjectDetailAPIView(BaseCompanyAPIView):
             membership=membership,
         )
 
-        serializer = ProjectDetailSerializer(project)
+        serializer = ProjectDetailSerializer(
+            project,
+            context={
+                "membership": request.membership,
+            },
+        )
         return ApiResponse.success(data=serializer.data)
 
 

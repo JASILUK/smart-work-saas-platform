@@ -14,23 +14,28 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+"""
+URL configuration for config project.
+"""
 
 from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+
     path("api/users/v1/", include("apps.users.api.v1.urls")),
     path("api/billing/v1/", include("apps.billing.api.v1.urls")),
     path("api/company/v1/", include("apps.companies.api.v1.urls")),
     path("api/rbac/v1/", include("apps.rbac.api.v1.urls")),
     path("api/platform/v1/", include("apps.rbac.api.v1.urls")),
-    path("api/chat/v1/",include("apps.chat.api.v1.urls")),
-    path("api/notification/v1/",include("apps.notifications.api.v1.urls")),
+
+    path("api/chat/v1/", include("apps.chat.api.v1.urls")),
+    path("api/notification/v1/", include("apps.notifications.api.v1.urls")),
     path("api/meetings/v1/", include("apps.meetings.api.v1.urls")),
-    path("api/calendars/v1/",include("apps.calendars.api.v1.urls"),),
+    path("api/calendars/v1/", include("apps.calendars.api.v1.urls")),
     path("api/attendance/v1/", include("apps.attendance.api.v1.urls")),
+
     path("api/projects/v1/", include("apps.projects.api.v1.urls")),
-
-
+    path("api/tasks/v1/", include("apps.tasks.api.v1.urls")),
 ]

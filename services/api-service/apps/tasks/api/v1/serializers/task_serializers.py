@@ -1,0 +1,363 @@
+from typing import Any, Dict, Optional
+
+from rest_framework import serializers
+
+from apps.projects.models.projects import Project
+from apps.tasks.models.tasks import Task, TaskPriority, TaskStatus
+
+
+# =============================================================================
+# NESTED READ SERIALIZERS (LIGHTWEIGHT DISPLAY)
+# =============================================================================
+
+class TaskMembershipSerializer(serializers.Serializer):
+    """
+    Lightweight read-only serializer for Membership display inside tasks.
+    Exposes user-facing employee attributes without internal IDs.
+    """
+
+    id = serializers.IntegerField(read_only=True)
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    job_title = serializers.CharField(read_only=True)
+    department = serializers.SerializerMethodField(read_only=True)
+    work_mode = serializers.CharField(read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        fields = [
+            "id",
+            "user_id",
+            "full_name",
+            "email",
+            "job_title",
+            "department",
+            "work_mode",
+            "is_active",
+        ]
+
+    def get_full_name(self, obj) -> str:
+        """Return user's full name or email fallback."""
+        if hasattr(obj, "user") and obj.user:
+            return obj.user.get_full_name() or obj.user.email
+        return ""
+
+    def get_department(self, obj) -> Optional[str]:
+        """Return department name if available."""
+        if hasattr(obj, "department") and obj.department:
+            return obj.department.name
+        return None
+
+
+class TaskProjectSerializer(serializers.Serializer):
+    """
+    Lightweight read-only serializer for Project display inside tasks.
+    Exposes essential project context for task cards and detail views.
+    """
+
+    id = serializers.IntegerField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    code = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    color = serializers.CharField(read_only=True)
+    visibility = serializers.CharField(read_only=True)
+
+    class Meta:
+        fields = ["id", "name", "code", "status", "color", "visibility"]
+
+
+# =============================================================================
+# READ SERIALIZERS (LIST & DETAIL REPRESENTATIONS)
+# =============================================================================
+
+class TaskListSerializer(serializers.ModelSerializer):
+    """
+    Optimized read-only serializer for task list endpoints and Kanban boards.
+    Minimizes payload weight while providing nested context for UI rendering.
+    """
+
+    project = TaskProjectSerializer(read_only=True)
+    assigned_to = TaskMembershipSerializer(read_only=True)
+    created_by = TaskMembershipSerializer(read_only=True)
+    is_personal = serializers.BooleanField(read_only=True)
+    is_project_task = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            "id",
+            "title",
+            "status",
+            "priority",
+            "start_date",
+            "due_date",
+            "project",
+            "assigned_to",
+            "created_by",
+            "is_personal",
+            "is_project_task",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class TaskDetailSerializer(serializers.ModelSerializer):
+    """
+    Complete read-only serializer for task detail views.
+    Includes full nested entities, descriptions, and audit timestamps.
+    """
+
+    project = TaskProjectSerializer(read_only=True)
+    assigned_to = TaskMembershipSerializer(read_only=True)
+    created_by = TaskMembershipSerializer(read_only=True)
+    is_personal = serializers.BooleanField(read_only=True)
+    is_project_task = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            "id",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "start_date",
+            "due_date",
+            "completed_at",
+            "created_at",
+            "updated_at",
+            "project",
+            "assigned_to",
+            "created_by",
+            "is_personal",
+            "is_project_task",
+        ]
+        read_only_fields = fields
+
+
+# =============================================================================
+# SUMMARY & METRICS SERIALIZERS
+# =============================================================================
+
+class ProjectTaskSummarySerializer(serializers.Serializer):
+    """
+    Read-only serializer for project task metrics and progress summaries.
+    Matches dictionary layout generated by TaskSelector.get_project_task_summary.
+    """
+
+    total = serializers.IntegerField(read_only=True, help_text="Total task count.")
+    todo = serializers.IntegerField(read_only=True, help_text="To Do count.")
+    in_progress = serializers.IntegerField(read_only=True, help_text="In Progress count.")
+    review = serializers.IntegerField(read_only=True, help_text="In Review count.")
+    completed = serializers.IntegerField(read_only=True, help_text="Completed count.")
+    cancelled = serializers.IntegerField(read_only=True, help_text="Cancelled count.")
+    overdue = serializers.IntegerField(read_only=True, help_text="Overdue count.")
+    due_today = serializers.IntegerField(read_only=True, help_text="Due today count.")
+    progress_percentage = serializers.IntegerField(
+        read_only=True, help_text="Task completion percentage (0-100)."
+    )
+
+    class Meta:
+        fields = [
+            "total",
+            "todo",
+            "in_progress",
+            "review",
+            "completed",
+            "cancelled",
+            "overdue",
+            "due_today",
+            "progress_percentage",
+        ]
+
+
+# =============================================================================
+# WRITE SERIALIZERS (PAYLOAD PARSERS / DTOs)
+# =============================================================================
+
+class TaskCreateSerializer(serializers.Serializer):
+    """
+    Write-only serializer for Task creation.
+    Parses payload and validates syntactic invariants before passing to TaskService.
+    """
+
+    title = serializers.CharField(
+        max_length=255,
+        required=True,
+        allow_blank=False,
+        help_text="Concise title or summary of the task.",
+    )
+
+    description = serializers.CharField(
+        max_length=5000,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text="Detailed task description or specifications.",
+    )
+
+    priority = serializers.ChoiceField(
+        choices=TaskPriority.choices,
+        default=TaskPriority.MEDIUM,
+        help_text="Urgency level of the task.",
+    )
+
+    status = serializers.ChoiceField(
+        choices=TaskStatus.choices,
+        default=TaskStatus.TODO,
+        help_text="Initial state of the task.",
+    )
+
+    project_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        min_value=1,
+        help_text="Optional Project ID. If NULL, creates a Personal Task.",
+    )
+
+    assigned_to_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        min_value=1,
+        help_text="Optional target employee Membership ID.",
+    )
+
+    start_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Planned start date.",
+    )
+
+    due_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text="Target completion deadline.",
+    )
+
+    def validate_title(self, value: str) -> str:
+        """Sanatize title string."""
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise serializers.ValidationError("Title must be at least 2 characters long.")
+        return cleaned
+
+    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Syntactic cross-field date validation."""
+        start_date = data.get("start_date")
+        due_date = data.get("due_date")
+
+        if start_date and due_date and start_date > due_date:
+            raise serializers.ValidationError(
+                {"due_date": "Target due date must be on or after start date."}
+            )
+
+        return data
+
+
+class TaskUpdateSerializer(serializers.Serializer):
+    """
+    Write-only serializer for selective partial task updates.
+    All fields optional to support partial updates (PATCH).
+    """
+
+    title = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=False,
+        help_text="Updated task title.",
+    )
+
+    description = serializers.CharField(
+        max_length=5000,
+        required=False,
+        allow_blank=True,
+        help_text="Updated task description.",
+    )
+
+    priority = serializers.ChoiceField(
+        choices=TaskPriority.choices,
+        required=False,
+        help_text="Updated task priority.",
+    )
+
+    status = serializers.ChoiceField(
+        choices=TaskStatus.choices,
+        required=False,
+        help_text="Updated task status.",
+    )
+
+    project_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Updated Project ID.",
+    )
+
+    assigned_to_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Updated Membership ID.",
+    )
+
+    start_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Updated start date.",
+    )
+
+    due_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Updated due date.",
+    )
+
+    def validate_title(self, value: str) -> str:
+        """Sanatize title string if supplied."""
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise serializers.ValidationError("Title must be at least 2 characters long.")
+        return cleaned
+
+    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Syntactic cross-field date validation when both dates are provided."""
+        start_date = data.get("start_date")
+        due_date = data.get("due_date")
+
+        if start_date and due_date and start_date > due_date:
+            raise serializers.ValidationError(
+                {"due_date": "Target due date must be on or after start date."}
+            )
+
+        return data
+
+
+class TaskAssignSerializer(serializers.Serializer):
+    """
+    Action serializer for assigning or reassigning a task.
+    Used by POST /tasks/{id}/assign/ endpoint.
+    """
+
+    assigned_to_id = serializers.IntegerField(
+        required=True,
+        min_value=1,
+        help_text="Membership ID of the employee to assign.",
+    )
+
+
+class TaskStatusSerializer(serializers.Serializer):
+    """
+    Action serializer for changing task lifecycle status.
+    Used by POST /tasks/{id}/status/ endpoint.
+    """
+
+    status = serializers.ChoiceField(
+        choices=TaskStatus.choices,
+        required=True,
+        help_text="Target task status to transition into.",
+    )

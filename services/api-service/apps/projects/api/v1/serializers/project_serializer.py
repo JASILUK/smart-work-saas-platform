@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.projects.models.projects import Project
 from apps.projects.models.project_members import ProjectMember
 from apps.projects.selectors.project_selector import ProjectSelector
+from apps.projects.selectors.project_member_selector import ProjectMemberSelector
 
 
 # ================================================================
@@ -349,6 +350,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     """
 
     owner = ProjectOwnerSerializer(read_only=True)
+    my_membership = serializers.SerializerMethodField(read_only=True)
     is_active = serializers.BooleanField(read_only=True)
     is_archived = serializers.BooleanField(read_only=True)
 
@@ -374,6 +376,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             "is_archived",
             # Ownership
             "owner",
+            "my_membership",
             # Summaries
             "member_summary",
             "task_summary",
@@ -406,6 +409,20 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             "is_active",
             "is_archived",
         ]
+
+    def get_my_membership(self, obj: Project) -> Optional[Dict[str, Any]]:
+        """
+        Return the current authenticated user's membership summary
+        for this project, or None if the user is not a member.
+        """
+        membership = self.context.get("membership")
+        if not membership:
+            return None
+
+        return ProjectSelector.get_my_membership_summary(
+            project=obj,
+            membership=membership,
+        )
 
     def get_member_summary(self, obj: Project) -> Dict[str, int]:
         return ProjectSelector.get_member_summary(obj)
